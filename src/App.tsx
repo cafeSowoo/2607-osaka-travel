@@ -44,7 +44,9 @@ const getViewFromHash = (): View => {
   return viewIds.includes(candidate as View) ? candidate as View : 'schedule'
 }
 
+const formatJpy = (value: number) => `¥${value.toLocaleString('ja-JP')}`
 const formatKrw = (value: number, rate: number) => `₩${Math.round(value * rate).toLocaleString('ko-KR')}`
+const formatBudget = (value: number, showKrw: boolean, rate: number) => showKrw ? formatKrw(value, rate) : formatJpy(value)
 const normalizeTime = (value: string) => value.trim().slice(0, 5)
 const SCHEDULE_COLUMN_STORAGE_KEY = 'osaka-travel-pwa:schedule-column-widths:v1'
 
@@ -357,7 +359,7 @@ function ScheduleView({
                 <span><CategoryBadge category={item.category} /></span>
                 <span>{item.title}</span>
                 <span>{item.note || '-'}</span>
-                <span>{showKrw ? formatKrw(item.budgetJpy, exchangeRate) : item.budgetJpy.toLocaleString('ja-JP')}</span>
+                <span>{formatBudget(item.budgetJpy, showKrw, exchangeRate)}</span>
               </button>
             )) : <EmptyState text="이 날짜의 일정표가 비어 있습니다." />}
             <button className="table-add-row" disabled={readonly} onClick={onAdd}>
@@ -366,7 +368,7 @@ function ScheduleView({
             </button>
             <div className="table-total-row">
               <span>합계</span>
-              <strong>{showKrw ? formatKrw(dayBudget, exchangeRate) : dayBudget.toLocaleString('ja-JP')}</strong>
+              <strong>{formatBudget(dayBudget, showKrw, exchangeRate)}</strong>
             </div>
           </div>
         </div>
