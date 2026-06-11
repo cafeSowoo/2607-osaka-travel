@@ -46,10 +46,13 @@ export type Reservation = {
   sortOrder: number
 }
 
+export type ChecklistItemKind = 'task' | 'divider'
+
 export type ChecklistItem = {
   id: string
   tripId: string
   section: '출국 전' | '여행 중' | '귀국 전'
+  kind: ChecklistItemKind
   title: string
   done: boolean
   sortOrder: number

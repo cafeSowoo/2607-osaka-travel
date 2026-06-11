@@ -7,13 +7,13 @@ import {
   ClipboardCheck,
   Cloud,
   CloudOff,
+  GripVertical,
   Hotel,
   ListChecks,
   LogIn,
   LogOut,
   Luggage,
   MapPin,
-  Pencil,
   Plane,
   Plus,
   RefreshCw,
@@ -22,12 +22,18 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
-import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type {
+  CSSProperties,
+  DragEvent as ReactDragEvent,
+  FormEvent as ReactFormEvent,
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+} from 'react'
 import './App.css'
 import { categories } from './data/seed'
 import { useTravelData } from './hooks/useTravelData'
-import type { Category, ItineraryItem, Reservation, SyncState, TripDay } from './types'
+import type { Category, ChecklistItem, ChecklistItemKind, ItineraryItem, Reservation, SyncState, TripDay } from './types'
 
 type View = 'schedule' | 'reservations' | 'checklist' | 'settings'
 
@@ -130,7 +136,6 @@ function ShellNav({ activeView, setActiveView }: { activeView: View; setActiveVi
         <div className="app-mark small"><Luggage size={19} /></div>
         <div>
           <strong>2607 Osaka</strong>
-          <span>2026.07.26 (일) - 07.30 (목)</span>
         </div>
       </div>
       <div className="nav-list">
@@ -149,6 +154,7 @@ function ShellNav({ activeView, setActiveView }: { activeView: View; setActiveVi
 }
 
 function StatusStrip({
+  title,
   message,
   offline,
   readonly,
@@ -156,6 +162,7 @@ function StatusStrip({
   onLogout,
   syncState,
 }: {
+  title: string
   message: string
   offline: boolean
   readonly: boolean
@@ -166,8 +173,7 @@ function StatusStrip({
   return (
     <header className="topbar">
       <div>
-        <p className="eyeline">오사카 여행 운영판</p>
-        <h1>오늘 필요한 정보만 빠르게</h1>
+        <h1>{title}</h1>
       </div>
       <div className="topbar-actions">
         <span className={offline ? 'sync-chip danger' : 'sync-chip'}>
@@ -221,7 +227,6 @@ function ScheduleView({
   exchangeRate,
   showKrw,
   setShowKrw,
-  onExchangeRate,
   onAdd,
   onSave,
   onDelete,
@@ -239,7 +244,6 @@ function ScheduleView({
   exchangeRate: number
   showKrw: boolean
   setShowKrw: (value: boolean) => void
-  onExchangeRate: (value: number) => void
   onAdd: () => void
   onSave: (item: ItineraryItem) => void
   onDelete: (id: string) => void
@@ -301,9 +305,6 @@ function ScheduleView({
       <header className="schedule-header">
         <div className="schedule-title">
           <h1>{tripTitle}</h1>
-          <button className="text-icon-button" aria-label="여행 제목 편집">
-            <Pencil size={16} />
-          </button>
         </div>
         <div className="schedule-actions">
           <div className="currency-switch" aria-label="예산 통화">
@@ -314,10 +315,6 @@ function ScheduleView({
               <RefreshCw size={13} />
             </button>
           </div>
-          <label className="rate-field" aria-label="JPY KRW 환율">
-            <span>₩</span>
-            <input type="number" step="0.1" value={exchangeRate} onChange={(event) => onExchangeRate(Number(event.target.value))} />
-          </label>
           <div className="split-add">
             <button className="primary-button schedule-add" disabled={readonly} onClick={onAdd}>
               일정 추가
@@ -365,10 +362,6 @@ function ScheduleView({
                 <span>{formatBudget(item.budgetJpy, showKrw, exchangeRate)}</span>
               </button>
             )) : <EmptyState text="이 날짜의 일정표가 비어 있습니다." />}
-            <button className="table-add-row" disabled={readonly} onClick={onAdd}>
-              <Plus size={16} />
-              일정 추가
-            </button>
             <div className="table-total-row">
               <span>합계</span>
               <strong>{formatBudget(dayBudget, showKrw, exchangeRate)}</strong>
@@ -484,34 +477,479 @@ function ReservationCard({ reservation, compact = false }: { reservation: Reserv
   )
 }
 
+type ChecklistDragState = {
+  section: ChecklistItem['section']
+  fromId: string
+  floatIndex: number
+  slotHeight: number
+  listTop: number
+}
+
+function getFloatIndexFromPointer(
+  itemCount: number,
+  pointerY: number,
+  listTop: number,
+  slotHeight: number,
+): number {
+  const relativeY = pointerY - listTop
+  const index = relativeY / slotHeight
+  return Math.max(0, Math.min(itemCount - 1, index))
+}
+
+function discreteTargetSlot(index: number, fromIndex: number, floatIndex: number): number {
+  if (index === fromIndex) return floatIndex
+  if (fromIndex < floatIndex) {
+    if (index > fromIndex && index <= floatIndex) return index - 1
+  } else if (fromIndex > floatIndex) {
+    if (index < fromIndex && index >= floatIndex) return index + 1
+  }
+  return index
+}
+
+function getContinuousShifts(
+  items: ChecklistItem[],
+  fromId: string,
+  floatIndex: number,
+  slotHeight: number,
+): Record<string, number> {
+  const fromIndex = items.findIndex((item) => item.id === fromId)
+  if (fromIndex < 0) return {}
+
+  const floorIndex = Math.floor(floatIndex)
+  const ceilIndex = Math.ceil(floatIndex)
+  const fraction = floatIndex - floorIndex
+  const shifts: Record<string, number> = {}
+
+  items.forEach((item, index) => {
+    const slotAtFloor = discreteTargetSlot(index, fromIndex, floorIndex)
+    const slotAtCeil = discreteTargetSlot(index, fromIndex, ceilIndex)
+    const targetSlot = floorIndex === ceilIndex
+      ? slotAtFloor
+      : slotAtFloor + (slotAtCeil - slotAtFloor) * fraction
+
+    shifts[item.id] = (targetSlot - index) * slotHeight
+  })
+
+  return shifts
+}
+
+const TRANSPARENT_DRAG_IMAGE = (() => {
+  if (typeof Image === 'undefined') return null
+  const image = new Image()
+  image.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+  return image
+})()
+
 function ChecklistView({
   items,
   onToggle,
+  onAdd,
+  onUpdate,
+  onDelete,
+  onReorder,
   readonly,
 }: {
-  items: ReturnType<typeof useTravelData>['data']['checklistItems']
+  items: ChecklistItem[]
   onToggle: (id: string) => void
+  onAdd: (section: ChecklistItem['section'], title: string, kind?: ChecklistItemKind) => void
+  onUpdate: (id: string, title: string) => void
+  onDelete: (id: string) => void
+  onReorder: (section: ChecklistItem['section'], fromId: string, toId: string) => void
   readonly: boolean
 }) {
   const sections = ['출국 전', '여행 중', '귀국 전'] as const
+  const [addingSection, setAddingSection] = useState<ChecklistItem['section'] | null>(null)
+  const [addingKind, setAddingKind] = useState<ChecklistItemKind>('task')
+  const [draftTitle, setDraftTitle] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState('')
+  const [dragState, setDragState] = useState<ChecklistDragState | null>(null)
+  const dragStateRef = useRef<ChecklistDragState | null>(null)
+  const dragImageRef = useRef<HTMLElement | null>(null)
+  const listRefs = useRef<Partial<Record<ChecklistItem['section'], HTMLDivElement | null>>>({})
+  const flipBeforeRef = useRef<Map<string, DOMRect>>(new Map())
+
+  useEffect(() => {
+    dragStateRef.current = dragState
+  }, [dragState])
+
+  const captureFlipBefore = (section: ChecklistItem['section']) => {
+    const list = listRefs.current[section]
+    if (!list) return
+
+    const rects = new Map<string, DOMRect>()
+    list.querySelectorAll('[data-check-id]').forEach((element) => {
+      const id = element.getAttribute('data-check-id')
+      if (id) rects.set(id, element.getBoundingClientRect())
+    })
+    flipBeforeRef.current = rects
+  }
+
+  useLayoutEffect(() => {
+    if (flipBeforeRef.current.size === 0 || dragState) return
+
+    Object.values(listRefs.current).forEach((list) => {
+      list?.querySelectorAll('[data-check-id]').forEach((element) => {
+        const id = element.getAttribute('data-check-id')
+        if (!id || !flipBeforeRef.current.has(id)) return
+
+        const deltaY = flipBeforeRef.current.get(id)!.top - element.getBoundingClientRect().top
+        if (Math.abs(deltaY) < 1) return
+
+        const htmlElement = element as HTMLElement
+        htmlElement.style.transition = 'none'
+        htmlElement.style.transform = `translateY(${deltaY}px)`
+        requestAnimationFrame(() => {
+          htmlElement.style.transition = 'transform 220ms cubic-bezier(0.2, 0, 0, 1)'
+          htmlElement.style.transform = ''
+        })
+      })
+    })
+    flipBeforeRef.current = new Map()
+  }, [items, dragState])
+
+  const handleToggle = (section: ChecklistItem['section'], itemId: string) => {
+    if (readonly || dragStateRef.current) return
+    captureFlipBefore(section)
+    onToggle(itemId)
+  }
+
+  const clearDragStyles = useCallback(() => {
+    Object.values(listRefs.current).forEach((list) => {
+      list?.querySelectorAll('.check-item').forEach((element) => {
+        const htmlElement = element as HTMLElement
+        htmlElement.style.transition = ''
+        htmlElement.style.transform = ''
+      })
+    })
+  }, [])
+
+  const endDrag = useCallback(() => {
+    dragImageRef.current?.remove()
+    dragImageRef.current = null
+    clearDragStyles()
+    setDragState(null)
+  }, [clearDragStyles])
+
+  useEffect(() => {
+    document.addEventListener('dragend', endDrag)
+    return () => document.removeEventListener('dragend', endDrag)
+  }, [endDrag])
+
+  useEffect(() => {
+    if (!dragState) return
+
+    const handlePointerUp = () => {
+      window.setTimeout(() => {
+        if (dragStateRef.current) endDrag()
+      }, 50)
+    }
+
+    window.addEventListener('mouseup', handlePointerUp)
+    window.addEventListener('pointerup', handlePointerUp)
+    return () => {
+      window.removeEventListener('mouseup', handlePointerUp)
+      window.removeEventListener('pointerup', handlePointerUp)
+    }
+  }, [dragState, endDrag])
+
+  const submitNewItem = (section: ChecklistItem['section'], event: ReactFormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const cleanTitle = draftTitle.trim()
+    if (!cleanTitle) return
+    onAdd(section, cleanTitle, addingKind)
+    setDraftTitle('')
+    setAddingKind('task')
+    setAddingSection(null)
+  }
+
+  const openAddForm = (section: ChecklistItem['section']) => {
+    cancelEditing()
+    setAddingSection((current) => (current === section ? null : section))
+    setAddingKind('task')
+    setDraftTitle('')
+  }
+
+  const startEditing = (item: ChecklistItem) => {
+    if (readonly || dragStateRef.current) return
+    setAddingSection(null)
+    setDraftTitle('')
+    setEditingId(item.id)
+    setEditDraft(item.title)
+  }
+
+  const cancelEditing = () => {
+    setEditingId(null)
+    setEditDraft('')
+  }
+
+  const submitEdit = (item: ChecklistItem) => {
+    const cleanTitle = editDraft.trim()
+    if (!cleanTitle) {
+      cancelEditing()
+      return
+    }
+    onUpdate(item.id, cleanTitle)
+    cancelEditing()
+  }
+
+  const handleEditKeyDown = (item: ChecklistItem, event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      submitEdit(item)
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      cancelEditing()
+    }
+  }
+
+  const startDrag = (item: ChecklistItem, sectionItems: ChecklistItem[], event: ReactDragEvent<HTMLButtonElement>) => {
+    if (dragStateRef.current) return
+
+    const checkItem = event.currentTarget.closest('.check-item') as HTMLElement | null
+    const fromIndex = sectionItems.findIndex((entry) => entry.id === item.id)
+
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', item.id)
+    event.dataTransfer.setData('application/x-checklist-section', item.section)
+
+    if (checkItem) {
+      const list = checkItem.closest('.check-list') as HTMLElement | null
+      const listTop = list?.getBoundingClientRect().top ?? checkItem.getBoundingClientRect().top - fromIndex * (checkItem.offsetHeight + 10)
+      const slotHeight = checkItem.offsetHeight + 10
+
+      if (TRANSPARENT_DRAG_IMAGE) {
+        event.dataTransfer.setDragImage(TRANSPARENT_DRAG_IMAGE, 0, 0)
+      } else {
+        const dragGhost = document.createElement('div')
+        dragGhost.style.width = '1px'
+        dragGhost.style.height = '1px'
+        dragGhost.style.opacity = '0'
+        dragGhost.style.position = 'fixed'
+        dragGhost.style.top = '0'
+        dragGhost.style.left = '0'
+        document.body.appendChild(dragGhost)
+        dragImageRef.current = dragGhost
+        event.dataTransfer.setDragImage(dragGhost, 0, 0)
+      }
+
+      requestAnimationFrame(() => {
+        setDragState({
+          section: item.section,
+          fromId: item.id,
+          floatIndex: fromIndex,
+          slotHeight,
+          listTop,
+        })
+      })
+    }
+  }
+
+  const handleListDragOver = (
+    section: ChecklistItem['section'],
+    sectionItems: ChecklistItem[],
+    event: ReactDragEvent<HTMLDivElement>,
+  ) => {
+    event.preventDefault()
+    const current = dragStateRef.current
+    if (!current || current.section !== section) return
+
+    const floatIndex = getFloatIndexFromPointer(
+      sectionItems.length,
+      event.clientY,
+      current.listTop,
+      current.slotHeight,
+    )
+
+    if (Math.abs(floatIndex - current.floatIndex) < 0.01) return
+    setDragState((state) => state ? { ...state, floatIndex } : null)
+  }
+
+  const dropItem = (section: ChecklistItem['section'], sectionItems: ChecklistItem[], event: ReactDragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+
+    const current = dragStateRef.current
+    if (current?.section === section) {
+      const targetIndex = Math.round(current.floatIndex)
+      const toItem = sectionItems[targetIndex]
+      if (toItem && current.fromId !== toItem.id) {
+        onReorder(section, current.fromId, toItem.id)
+      }
+    }
+    endDrag()
+  }
 
   return (
     <section className="checklist-board">
-      {sections.map((section) => (
-        <article className="panel" key={section}>
-          <div className="panel-header">
-            <h3>{section}</h3>
-          </div>
-          <div className="check-list">
-            {items.filter((item) => item.section === section).map((item) => (
-              <button key={item.id} disabled={readonly} className={item.done ? 'done' : ''} onClick={() => onToggle(item.id)}>
-                {item.done ? <CheckCircle2 size={18} /> : <Circle size={18} />}
-                {item.title}
+      {sections.map((section) => {
+        const sectionItems = items.filter((item) => item.section === section).sort((a, b) => a.sortOrder - b.sortOrder)
+
+        return (
+          <article className="panel" key={section}>
+            <div className="panel-header">
+              <h3>{section}</h3>
+              <button
+                className="round-add-button"
+                type="button"
+                disabled={readonly}
+                aria-label={`${section} 항목 추가`}
+                onClick={() => openAddForm(section)}
+              >
+                <Plus size={16} />
               </button>
-            ))}
-          </div>
-        </article>
-      ))}
+            </div>
+            {addingSection === section && (
+              <form className="check-add-form" onSubmit={(event) => submitNewItem(section, event)}>
+                <div className="check-add-kind">
+                  <button
+                    type="button"
+                    className={addingKind === 'task' ? 'active' : ''}
+                    disabled={readonly}
+                    onClick={() => setAddingKind('task')}
+                  >
+                    To-do
+                  </button>
+                  <button
+                    type="button"
+                    className={addingKind === 'divider' ? 'active' : ''}
+                    disabled={readonly}
+                    onClick={() => setAddingKind('divider')}
+                  >
+                    구분자
+                  </button>
+                </div>
+                <input
+                  autoFocus
+                  value={draftTitle}
+                  placeholder={addingKind === 'divider' ? '구분자 이름' : 'To-do 추가'}
+                  disabled={readonly}
+                  onChange={(event) => setDraftTitle(event.target.value)}
+                />
+                <button className="primary-button" type="submit" disabled={readonly || !draftTitle.trim()}>
+                  추가
+                </button>
+              </form>
+            )}
+            <div
+              className={`check-list ${dragState?.section === section ? 'is-sorting' : ''}`}
+              ref={(element) => { listRefs.current[section] = element }}
+              onDragOver={(event) => handleListDragOver(section, sectionItems, event)}
+              onDragEnd={endDrag}
+              onDrop={(event) => dropItem(section, sectionItems, event)}
+            >
+              {sectionItems.map((item) => {
+                const isDivider = item.kind === 'divider'
+                const isDraggingSection = dragState?.section === section
+                const isPreview = isDraggingSection && dragState.fromId === item.id
+                const isEditing = editingId === item.id
+                const shift = isDraggingSection
+                  ? getContinuousShifts(sectionItems, dragState.fromId, dragState.floatIndex, dragState.slotHeight)[item.id] ?? 0
+                  : 0
+
+                return (
+                <div
+                  key={item.id}
+                  data-check-id={item.id}
+                  className={`check-item ${isDivider ? 'divider' : ''} ${item.done ? 'done' : ''} ${isPreview ? 'drag-preview' : ''} ${isEditing ? 'editing' : ''}`}
+                  style={shift ? { transform: `translateY(${shift}px)` } : undefined}
+                  onDragOver={(event) => handleListDragOver(section, sectionItems, event)}
+                  onDrop={(event) => dropItem(section, sectionItems, event)}
+                >
+                  {isDivider ? (
+                    <>
+                      <div className="check-divider-body">
+                        {isEditing ? (
+                          <input
+                            autoFocus
+                            className="check-edit-input"
+                            value={editDraft}
+                            disabled={readonly}
+                            aria-label={`${item.title} 수정`}
+                            onChange={(event) => setEditDraft(event.target.value)}
+                            onKeyDown={(event) => handleEditKeyDown(item, event)}
+                            onBlur={() => submitEdit(item)}
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            className="check-divider-title"
+                            disabled={readonly || isPreview}
+                            title="클릭해서 수정"
+                            onClick={() => startEditing(item)}
+                          >
+                            {item.title}
+                          </button>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="check-delete"
+                        disabled={readonly || isPreview}
+                        aria-label={`${item.title} 구분자 삭제`}
+                        title="구분자 삭제"
+                        onClick={() => onDelete(item.id)}
+                      >
+                        <X size={15} />
+                      </button>
+                    </>
+                  ) : (
+                    <div className="check-toggle">
+                      <button
+                        type="button"
+                        disabled={readonly}
+                        className="check-mark"
+                        aria-label={item.done ? `${item.title} 완료 취소` : `${item.title} 완료`}
+                        onClick={() => handleToggle(section, item.id)}
+                      >
+                        {item.done ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+                      </button>
+                      {isEditing ? (
+                        <input
+                          autoFocus
+                          className="check-edit-input"
+                          value={editDraft}
+                          disabled={readonly}
+                          aria-label={`${item.title} 수정`}
+                          onChange={(event) => setEditDraft(event.target.value)}
+                          onKeyDown={(event) => handleEditKeyDown(item, event)}
+                          onBlur={() => submitEdit(item)}
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          className="check-title"
+                          disabled={readonly || isPreview}
+                          title="클릭해서 수정"
+                          onClick={() => startEditing(item)}
+                        >
+                          {item.title}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    className="drag-handle"
+                    draggable={!readonly && !isEditing}
+                    disabled={readonly || isEditing}
+                    aria-label={`${item.title} 순서 변경`}
+                    title="드래그해서 순서 변경"
+                    aria-hidden={isPreview}
+                    tabIndex={isPreview ? -1 : 0}
+                    onDragStart={(event) => startDrag(item, sectionItems, event)}
+                    onDragEnd={endDrag}
+                  >
+                    <GripVertical size={17} />
+                  </button>
+                </div>
+                )
+              })}
+            </div>
+          </article>
+        )
+      })}
     </section>
   )
 }
@@ -591,6 +1029,10 @@ function App() {
     upsertItineraryItem,
     deleteItineraryItem,
     toggleChecklistItem,
+    addChecklistItem,
+    updateChecklistItem,
+    deleteChecklistItem,
+    reorderChecklistItems,
   } = useTravelData()
 
   const [activeView, setActiveView] = useState<View>(getViewFromHash)
@@ -599,6 +1041,7 @@ function App() {
   const [showKrw, setShowKrw] = useState(false)
 
   const activeTripDay = data.days.find((day) => day.dayIndex === activeDay) ?? data.days[0]
+  const activeViewLabel = views.find((view) => view.id === activeView)?.label ?? data.trip.title
   const navigate = (view: View) => {
     window.location.hash = `/${view}`
     setActiveView(view)
@@ -644,7 +1087,7 @@ function App() {
     <div className="app-shell">
       <ShellNav activeView={activeView} setActiveView={navigate} />
       <main className="workspace">
-        {activeView !== 'schedule' && <StatusStrip message={syncState.message} offline={syncState.offline} readonly={syncState.readonly} onRefresh={refresh} onLogout={logout} syncState={syncState} />}
+        {activeView !== 'schedule' && <StatusStrip title={activeViewLabel} message={syncState.message} offline={syncState.offline} readonly={syncState.readonly} onRefresh={refresh} onLogout={logout} syncState={syncState} />}
         {activeView === 'schedule' && (
           <ScheduleView
             days={data.days}
@@ -658,7 +1101,6 @@ function App() {
             exchangeRate={data.trip.exchangeRate}
             showKrw={showKrw}
             setShowKrw={setShowKrw}
-            onExchangeRate={(exchangeRate) => updateTrip({ ...data.trip, exchangeRate })}
             onAdd={addItem}
             onSave={saveItem}
             onDelete={deleteItem}
@@ -667,7 +1109,17 @@ function App() {
           />
         )}
         {activeView === 'reservations' && <ReservationsView reservations={data.reservations} />}
-        {activeView === 'checklist' && <ChecklistView items={data.checklistItems} onToggle={toggleChecklistItem} readonly={syncState.readonly} />}
+        {activeView === 'checklist' && (
+          <ChecklistView
+            items={data.checklistItems}
+            onToggle={toggleChecklistItem}
+            onAdd={addChecklistItem}
+            onUpdate={updateChecklistItem}
+            onDelete={deleteChecklistItem}
+            onReorder={reorderChecklistItems}
+            readonly={syncState.readonly}
+          />
+        )}
         {activeView === 'settings' && (
           <SettingsView
             exchangeRate={data.trip.exchangeRate}

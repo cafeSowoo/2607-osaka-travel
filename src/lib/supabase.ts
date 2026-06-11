@@ -62,6 +62,7 @@ type ChecklistRow = {
   id: string
   trip_id: string
   section: ChecklistItem['section']
+  kind: ChecklistItem['kind'] | null
   title: string
   done: boolean
   sort_order: number | null
@@ -150,6 +151,7 @@ const fromChecklist = (row: ChecklistRow): ChecklistItem => ({
   id: row.id,
   tripId: row.trip_id,
   section: row.section,
+  kind: row.kind ?? 'task',
   title: row.title,
   done: row.done,
   sortOrder: row.sort_order ?? 0,
@@ -160,6 +162,7 @@ const toChecklist = (item: ChecklistItem, userId: string) => ({
   user_id: userId,
   trip_id: item.tripId,
   section: item.section,
+  kind: item.kind,
   title: item.title,
   done: item.done,
   sort_order: item.sortOrder,
@@ -241,5 +244,11 @@ export const deleteItineraryItem = async (id: string) => {
 export const saveChecklistItem = async (item: ChecklistItem, session: Session) => {
   if (!supabase) return
   const { error } = await supabase.from(TABLES.checklistItems).upsert(toChecklist(item, session.user.id))
+  if (error) throw error
+}
+
+export const deleteChecklistItem = async (id: string) => {
+  if (!supabase) return
+  const { error } = await supabase.from(TABLES.checklistItems).delete().eq('id', id)
   if (error) throw error
 }

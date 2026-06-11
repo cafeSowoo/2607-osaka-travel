@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js'
 import { readLocalData, writeLocalData } from '../lib/localStore'
 import {
   deleteItineraryItem as deleteRemoteItineraryItem,
+  deleteChecklistItem as deleteRemoteChecklistItem,
   getSession,
   isSupabaseConfigured,
   loadSupabaseData,
@@ -13,10 +14,15 @@ import {
   signOut,
   supabase,
 } from '../lib/supabase'
-import type { ChecklistItem, ItineraryItem, SyncState, TravelData, Trip } from '../types'
+import type { ChecklistItem, ChecklistItemKind, ItineraryItem, SyncState, TravelData, Trip } from '../types'
 
 const uuid = () => crypto.randomUUID()
 const normalizeTime = (value: string) => value.trim().slice(0, 5)
+
+const mergeTasksWithDividers = (sectionItems: ChecklistItem[], reorderedTasks: ChecklistItem[]) => {
+  const queue = [...reorderedTasks]
+  return sectionItems.map((item) => (item.kind === 'divider' ? item : queue.shift()!))
+}
 
 export const useTravelData = () => {
   const [data, setData] = useState<TravelData>(() => readLocalData())
@@ -179,13 +185,120 @@ export const useTravelData = () => {
   const toggleChecklistItem = useCallback(
     (id: string) => {
       const item = data.checklistItems.find((candidate) => candidate.id === id)
+      if (!item || item.kind === 'divider') return
+
+      const sectionItems = data.checklistItems
+        .filter((candidate) => candidate.section === item.section)
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+      const nextDone = !item.done
+      const others = sectionItems.filter((candidate) => candidate.id !== id && candidate.kind === 'task')
+      const incomplete = others.filter((candidate) => !candidate.done)
+      const complete = others.filter((candidate) => candidate.done)
+      const nextItem: ChecklistItem = { ...item, done: nextDone }
+      const reorderedTasks = nextDone
+        ? [...incomplete, ...complete, nextItem]
+        : [...incomplete, nextItem, ...complete]
+      const merged = mergeTasksWithDividers(sectionItems, reorderedTasks)
+      const updatedSectionItems = merged.map((candidate, index) => ({
+        ...candidate,
+        sortOrder: (index + 1) * 10,
+      }))
+      const updatedById = new Map(updatedSectionItems.map((candidate) => [candidate.id, candidate]))
+      const next = {
+        ...data,
+        checklistItems: data.checklistItems
+          .map((candidate) => updatedById.get(candidate.id) ?? candidate)
+          .sort((a, b) => a.section.localeCompare(b.section) || a.sortOrder - b.sortOrder),
+      }
+      persist(
+        next,
+        session ? async () => {
+          await Promise.all(updatedSectionItems.map((candidate) => saveChecklistItem(candidate, session)))
+        } : undefined,
+      )
+    },
+    [data, persist, session],
+  )
+
+  const addChecklistItem = useCallback(
+    (section: ChecklistItem['section'], title: string, kind: ChecklistItemKind = 'task') => {
+      const cleanTitle = title.trim()
+      if (!cleanTitle) return
+      const sectionItems = data.checklistItems.filter((item) => item.section === section)
+      const nextItem: ChecklistItem = {
+        id: uuid(),
+        tripId: data.trip.id,
+        section,
+        kind,
+        title: cleanTitle,
+        done: false,
+        sortOrder: sectionItems.length * 10 + 10,
+      }
+      const next = {
+        ...data,
+        checklistItems: [...data.checklistItems, nextItem].sort((a, b) => a.section.localeCompare(b.section) || a.sortOrder - b.sortOrder),
+      }
+      persist(next, session ? () => saveChecklistItem(nextItem, session) : undefined)
+    },
+    [data, persist, session],
+  )
+
+  const updateChecklistItem = useCallback(
+    (id: string, title: string) => {
+      const item = data.checklistItems.find((candidate) => candidate.id === id)
       if (!item) return
-      const nextItem: ChecklistItem = { ...item, done: !item.done }
+      const cleanTitle = title.trim()
+      if (!cleanTitle || cleanTitle === item.title) return
+
+      const nextItem: ChecklistItem = { ...item, title: cleanTitle }
       const next = {
         ...data,
         checklistItems: data.checklistItems.map((candidate) => (candidate.id === id ? nextItem : candidate)),
       }
       persist(next, session ? () => saveChecklistItem(nextItem, session) : undefined)
+    },
+    [data, persist, session],
+  )
+
+  const deleteChecklistItem = useCallback(
+    (id: string) => {
+      const item = data.checklistItems.find((candidate) => candidate.id === id)
+      if (!item || item.kind !== 'divider') return
+
+      const next = {
+        ...data,
+        checklistItems: data.checklistItems.filter((candidate) => candidate.id !== id),
+      }
+      persist(next, session ? () => deleteRemoteChecklistItem(id) : undefined)
+    },
+    [data, persist, session],
+  )
+
+  const reorderChecklistItems = useCallback(
+    (section: ChecklistItem['section'], fromId: string, toId: string) => {
+      if (fromId === toId) return
+      const sectionItems = data.checklistItems.filter((item) => item.section === section).sort((a, b) => a.sortOrder - b.sortOrder)
+      const fromIndex = sectionItems.findIndex((item) => item.id === fromId)
+      const toIndex = sectionItems.findIndex((item) => item.id === toId)
+      if (fromIndex < 0 || toIndex < 0) return
+
+      const reordered = [...sectionItems]
+      const [moved] = reordered.splice(fromIndex, 1)
+      reordered.splice(toIndex, 0, moved)
+      const updatedSectionItems = reordered.map((item, index) => ({ ...item, sortOrder: (index + 1) * 10 }))
+      const updatedById = new Map(updatedSectionItems.map((item) => [item.id, item]))
+      const next = {
+        ...data,
+        checklistItems: data.checklistItems
+          .map((item) => updatedById.get(item.id) ?? item)
+          .sort((a, b) => a.section.localeCompare(b.section) || a.sortOrder - b.sortOrder),
+      }
+      persist(
+        next,
+        session ? async () => {
+          await Promise.all(updatedSectionItems.map((item) => saveChecklistItem(item, session)))
+        } : undefined,
+      )
     },
     [data, persist, session],
   )
@@ -200,5 +313,9 @@ export const useTravelData = () => {
     upsertItineraryItem,
     deleteItineraryItem,
     toggleChecklistItem,
+    addChecklistItem,
+    updateChecklistItem,
+    deleteChecklistItem,
+    reorderChecklistItems,
   }
 }
