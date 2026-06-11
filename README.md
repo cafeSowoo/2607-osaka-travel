@@ -14,7 +14,7 @@ Supabase 없이 실행하면 데모 모드와 로컬 캐시로 동작합니다.
 ## Supabase 설정
 
 1. Supabase 프로젝트에서 Google OAuth를 활성화합니다.
-2. `supabase/migrations/0001_osaka_travel.sql`을 적용합니다.
+2. `supabase/migrations`의 SQL을 적용합니다. 기존 Supabase 프로젝트를 함께 쓸 수 있도록 앱 테이블은 `osaka_` prefix를 사용합니다.
 3. `.env.example`을 참고해 `.env.local`을 만듭니다.
 4. Supabase Auth Redirect URL에 `http://localhost:5173`과 GitHub Pages 배포 URL을 추가합니다.
 
@@ -26,6 +26,8 @@ VITE_SUPABASE_ANON_KEY=your-supabase-anon-or-publishable-key
 ## 배포
 
 GitHub Pages 배포를 전제로 `base: './'`와 hash URL을 사용합니다. GitHub Actions에는 `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` secret을 등록하세요.
+
+Supabase Auth URL Configuration에는 개발 URL `http://127.0.0.1:5173/**`, `http://localhost:5173/**`와 GitHub Pages 배포 URL을 추가하세요. Google OAuth provider의 callback URL은 Supabase 프로젝트 URL 기준 `https://<project-ref>.supabase.co/auth/v1/callback`입니다.
 
 ```bash
 npm run build

@@ -11,6 +11,7 @@ import {
   ListChecks,
   LogIn,
   LogOut,
+  Luggage,
   MapPin,
   Pencil,
   Plane,
@@ -19,29 +20,31 @@ import {
   Search,
   Settings,
   SlidersHorizontal,
-  Sparkles,
-  Table2,
   Trash2,
   X,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react'
 import './App.css'
 import { categories } from './data/seed'
 import { useTravelData } from './hooks/useTravelData'
 import type { Category, ItineraryItem, Reservation, TripDay } from './types'
 
-type View = 'today' | 'schedule' | 'reservations' | 'checklist' | 'settings'
+type View = 'schedule' | 'reservations' | 'checklist' | 'settings'
 
 const views: Array<{ id: View; label: string; icon: typeof CalendarDays }> = [
-  { id: 'today', label: '오늘', icon: Sparkles },
-  { id: 'schedule', label: '일정', icon: Table2 },
+  { id: 'schedule', label: '일정', icon: CalendarDays },
   { id: 'reservations', label: '예약', icon: Plane },
   { id: 'checklist', label: '체크리스트', icon: ListChecks },
   { id: 'settings', label: '설정', icon: Settings },
 ]
+const viewIds = views.map((view) => view.id)
 
-const formatJpy = (value: number) => `¥${Math.round(value).toLocaleString('ja-JP')}`
+const getViewFromHash = (): View => {
+  const candidate = window.location.hash.replace('#/', '')
+  return viewIds.includes(candidate as View) ? candidate as View : 'schedule'
+}
+
 const formatKrw = (value: number, rate: number) => `₩${Math.round(value * rate).toLocaleString('ko-KR')}`
 const normalizeTime = (value: string) => value.trim().slice(0, 5)
 const SCHEDULE_COLUMN_STORAGE_KEY = 'osaka-travel-pwa:schedule-column-widths:v1'
@@ -123,10 +126,10 @@ function ShellNav({ activeView, setActiveView }: { activeView: View; setActiveVi
   return (
     <nav className="side-nav" aria-label="앱 메뉴">
       <div className="brand-block">
-        <div className="app-mark small">旅</div>
+        <div className="app-mark small"><Luggage size={19} /></div>
         <div>
           <strong>2607 Osaka</strong>
-          <span>Trip desk</span>
+          <span>2026.07.26 (일) - 07.30 (목)</span>
         </div>
       </div>
       <div className="nav-list">
@@ -174,83 +177,6 @@ function StatusStrip({
         </button>
       </div>
     </header>
-  )
-}
-
-function TodayView({
-  day,
-  items,
-  reservations,
-  checklistDone,
-  checklistTotal,
-  exchangeRate,
-  showKrw,
-}: {
-  day: TripDay
-  items: ItineraryItem[]
-  reservations: Reservation[]
-  checklistDone: number
-  checklistTotal: number
-  exchangeRate: number
-  showKrw: boolean
-}) {
-  const nextItem = items[0]
-  const dayBudget = items.reduce((sum, item) => sum + item.budgetJpy, 0)
-
-  return (
-    <section className="view-grid today-grid">
-      <article className="today-hero">
-        <p className="eyeline">{day.label}</p>
-        <h2>오늘 일정</h2>
-        <p>{items.length ? `${items.length}개의 일정이 준비되어 있어요.` : '아직 일정이 비어 있어요. 일정 탭에서 첫 행을 추가해보세요.'}</p>
-        <div className="hero-summary">
-          <span>다음 일정</span>
-          <strong>{nextItem ? `${makeTimeRange(nextItem)} · ${nextItem.title}` : '비어 있음'}</strong>
-        </div>
-      </article>
-
-      <article className="metric-card">
-        <span>예상 예산</span>
-        <strong>{showKrw ? formatKrw(dayBudget, exchangeRate) : formatJpy(dayBudget)}</strong>
-        <small>JPY 기준 · 환율 {exchangeRate}</small>
-      </article>
-
-      <article className="metric-card">
-        <span>체크리스트</span>
-        <strong>{checklistDone}/{checklistTotal}</strong>
-        <small>완료 항목</small>
-      </article>
-
-      <section className="panel wide">
-        <div className="panel-header">
-          <h3>타임라인</h3>
-        </div>
-        <div className="timeline-list">
-          {items.length ? items.map((item) => <TimelineItem key={item.id} item={item} />) : <EmptyState text="오늘 일정이 아직 없습니다." />}
-        </div>
-      </section>
-
-      <section className="panel">
-        <div className="panel-header">
-          <h3>예약 요약</h3>
-        </div>
-        <div className="reservation-stack compact">
-          {reservations.map((reservation) => <ReservationCard key={reservation.id} reservation={reservation} compact />)}
-        </div>
-      </section>
-    </section>
-  )
-}
-
-function TimelineItem({ item }: { item: ItineraryItem }) {
-  return (
-    <div className="timeline-item">
-      <time>{makeTimeRange(item)}</time>
-      <div>
-        <strong>{item.title}</strong>
-        <span>{item.category} · {item.place || '장소 미정'}</span>
-      </div>
-    </div>
   )
 }
 
@@ -504,16 +430,25 @@ function ReservationsView({ reservations }: { reservations: Reservation[] }) {
 
 function ReservationCard({ reservation, compact = false }: { reservation: Reservation; compact?: boolean }) {
   const Icon = reservation.kind === 'hotel' ? Hotel : Plane
+  const typeLabel = reservation.kind === 'hotel' ? '호텔' : '항공권'
+  const sourceBadge = reservation.kind === 'hotel' ? `아고다 예약번호 ${reservation.reference}` : `예약번호 ${reservation.reference}`
+  const visibleDetails = compact ? reservation.details.slice(0, 2) : reservation.details
+
   return (
     <article className={`reservation-card ${compact ? 'compact' : ''}`}>
       <div className="reservation-icon"><Icon size={19} /></div>
-      <div>
-        <span className="reference">예약번호 {reservation.reference}</span>
+      <div className="reservation-content">
+        <div className="reservation-kicker">
+          <span>{typeLabel}</span>
+          <strong>{sourceBadge}</strong>
+        </div>
         <h3>{reservation.title}</h3>
         <p>{reservation.subtitle}</p>
-        {!compact && <ul>{reservation.details.map((detail) => <li key={detail}>{detail}</li>)}</ul>}
+        <div className="reservation-detail-list">
+          {visibleDetails.map((detail) => <span key={detail}>{detail}</span>)}
+        </div>
       </div>
-      <ChevronRight size={18} />
+      <ChevronRight className="reservation-chevron" size={18} />
     </article>
   )
 }
@@ -627,24 +562,33 @@ function App() {
     toggleChecklistItem,
   } = useTravelData()
 
-  const [activeView, setActiveView] = useState<View>((window.location.hash.replace('#/', '') as View) || 'today')
+  const [activeView, setActiveView] = useState<View>(getViewFromHash)
   const [activeDay, setActiveDay] = useState(getActiveTripDay(data.days).dayIndex)
   const [selectedItem, setSelectedItem] = useState<ItineraryItem | null>(null)
   const [showKrw, setShowKrw] = useState(false)
 
   const activeTripDay = data.days.find((day) => day.dayIndex === activeDay) ?? data.days[0]
-  const todayDay = getActiveTripDay(data.days)
-  const todayItems = useMemo(
-    () => data.itineraryItems.filter((item) => item.dayIndex === todayDay.dayIndex).sort((a, b) => a.sortOrder - b.sortOrder),
-    [data.itineraryItems, todayDay.dayIndex],
-  )
-
-  const checklistDone = data.checklistItems.filter((item) => item.done).length
-
   const navigate = (view: View) => {
     window.location.hash = `/${view}`
     setActiveView(view)
   }
+
+  useEffect(() => {
+    const syncViewFromHash = () => {
+      const nextView = getViewFromHash()
+      setActiveView(nextView)
+      if (window.location.hash !== `#/${nextView}`) {
+        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#/${nextView}`)
+      }
+    }
+    const initialSync = window.setTimeout(syncViewFromHash, 0)
+    window.addEventListener('hashchange', syncViewFromHash)
+
+    return () => {
+      window.clearTimeout(initialSync)
+      window.removeEventListener('hashchange', syncViewFromHash)
+    }
+  }, [])
 
   if (!syncState.authenticated && !syncState.loading) {
     return <AuthScreen login={login} configured={syncState.configured} />
@@ -670,17 +614,6 @@ function App() {
       <ShellNav activeView={activeView} setActiveView={navigate} />
       <main className="workspace">
         {activeView !== 'schedule' && <StatusStrip message={syncState.message} offline={syncState.offline} readonly={syncState.readonly} onRefresh={refresh} onLogout={logout} />}
-        {activeView === 'today' && (
-          <TodayView
-            day={todayDay}
-            items={todayItems}
-            reservations={data.reservations}
-            checklistDone={checklistDone}
-            checklistTotal={data.checklistItems.length}
-            exchangeRate={data.trip.exchangeRate}
-            showKrw={showKrw}
-          />
-        )}
         {activeView === 'schedule' && (
           <ScheduleView
             days={data.days}

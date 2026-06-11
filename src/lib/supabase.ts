@@ -7,6 +7,13 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undef
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey)
 
+const TABLES = {
+  trips: 'osaka_trips',
+  itineraryItems: 'osaka_itinerary_items',
+  reservations: 'osaka_reservations',
+  checklistItems: 'osaka_checklist_items',
+} as const
+
 export const supabase: SupabaseClient | null = isSupabaseConfigured
   ? createClient(supabaseUrl!, supabaseAnonKey!, {
       auth: { persistSession: true, autoRefreshToken: true },
@@ -103,12 +110,12 @@ const toItinerary = (item: ItineraryItem, userId: string) => ({
   date: item.date,
   start_time: item.startTime || null,
   end_time: item.endTime || null,
-  place: item.place,
+  place: item.place.trim(),
   category: item.category,
-  title: item.title,
-  note: item.note,
+  title: item.title.trim(),
+  note: item.note.trim(),
   budget_jpy: item.budgetJpy,
-  google_place_query: item.googlePlaceQuery,
+  google_place_query: item.googlePlaceQuery.trim(),
   sort_order: item.sortOrder,
 })
 
@@ -181,21 +188,22 @@ export const loadSupabaseData = async (session: Session): Promise<TravelData> =>
   if (!supabase) return createSeedData()
   const userId = session.user.id
 
-  const { data: existingTrips, error: tripLookupError } = await supabase.from('trips').select('*').eq('id', seedTrip.id).limit(1)
+  const { data: existingTrips, error: tripLookupError } = await supabase.from(TABLES.trips).select('*').eq('id', seedTrip.id).limit(1)
   if (tripLookupError) throw tripLookupError
 
   if (!existingTrips?.length) {
     const seed = createSeedData()
-    await supabase.from('trips').upsert(toTrip(seed.trip, userId))
-    await supabase.from('reservations').upsert(seed.reservations.map((reservation) => toReservation(reservation, userId)))
-    await supabase.from('checklist_items').upsert(seed.checklistItems.map((item) => toChecklist(item, userId)))
+    await supabase.from(TABLES.trips).upsert(toTrip(seed.trip, userId))
+    await supabase.from(TABLES.itineraryItems).upsert(seed.itineraryItems.map((item) => toItinerary(item, userId)))
+    await supabase.from(TABLES.reservations).upsert(seed.reservations.map((reservation) => toReservation(reservation, userId)))
+    await supabase.from(TABLES.checklistItems).upsert(seed.checklistItems.map((item) => toChecklist(item, userId)))
   }
 
   const [trip, itinerary, reservations, checklist] = await Promise.all([
-    supabase.from('trips').select('*').eq('id', seedTrip.id).single(),
-    supabase.from('itinerary_items').select('*').eq('trip_id', seedTrip.id).order('day_index').order('sort_order'),
-    supabase.from('reservations').select('*').eq('trip_id', seedTrip.id).order('sort_order'),
-    supabase.from('checklist_items').select('*').eq('trip_id', seedTrip.id).order('sort_order'),
+    supabase.from(TABLES.trips).select('*').eq('id', seedTrip.id).single(),
+    supabase.from(TABLES.itineraryItems).select('*').eq('trip_id', seedTrip.id).order('day_index').order('sort_order'),
+    supabase.from(TABLES.reservations).select('*').eq('trip_id', seedTrip.id).order('sort_order'),
+    supabase.from(TABLES.checklistItems).select('*').eq('trip_id', seedTrip.id).order('sort_order'),
   ])
 
   if (trip.error) throw trip.error
@@ -214,24 +222,24 @@ export const loadSupabaseData = async (session: Session): Promise<TravelData> =>
 
 export const saveTrip = async (trip: Trip, session: Session) => {
   if (!supabase) return
-  const { error } = await supabase.from('trips').upsert(toTrip(trip, session.user.id))
+  const { error } = await supabase.from(TABLES.trips).upsert(toTrip(trip, session.user.id))
   if (error) throw error
 }
 
 export const saveItineraryItem = async (item: ItineraryItem, session: Session) => {
   if (!supabase) return
-  const { error } = await supabase.from('itinerary_items').upsert(toItinerary(item, session.user.id))
+  const { error } = await supabase.from(TABLES.itineraryItems).upsert(toItinerary(item, session.user.id))
   if (error) throw error
 }
 
 export const deleteItineraryItem = async (id: string) => {
   if (!supabase) return
-  const { error } = await supabase.from('itinerary_items').delete().eq('id', id)
+  const { error } = await supabase.from(TABLES.itineraryItems).delete().eq('id', id)
   if (error) throw error
 }
 
 export const saveChecklistItem = async (item: ChecklistItem, session: Session) => {
   if (!supabase) return
-  const { error } = await supabase.from('checklist_items').upsert(toChecklist(item, session.user.id))
+  const { error } = await supabase.from(TABLES.checklistItems).upsert(toChecklist(item, session.user.id))
   if (error) throw error
 }
