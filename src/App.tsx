@@ -5,7 +5,6 @@ import {
   ChevronRight,
   Circle,
   ClipboardCheck,
-  Bell,
   Cloud,
   CloudOff,
   Hotel,
@@ -20,7 +19,6 @@ import {
   RefreshCw,
   Search,
   Settings,
-  SlidersHorizontal,
   Trash2,
   X,
 } from 'lucide-react'
@@ -191,9 +189,6 @@ function AccountStatus({ syncState, onLogout }: { syncState: SyncState; onLogout
         <LogIn size={16} />
         {statusLabel}
       </span>
-      <button className="account-icon-button" type="button" aria-label="알림">
-        <Bell size={17} />
-      </button>
       <span className="avatar-button" title={syncState.user?.email || syncState.user?.name || '계정'}>
         {syncState.user?.avatarUrl ? (
           <img src={syncState.user.avatarUrl} alt="" referrerPolicy="no-referrer" />
@@ -306,16 +301,13 @@ function ScheduleView({
           </button>
         </div>
         <div className="schedule-actions">
-          <button className="ghost-button compact">
-            <SlidersHorizontal size={15} />
-            환율 설정
-          </button>
           <div className="currency-switch" aria-label="예산 통화">
-            <button className={!showKrw ? 'active' : ''} onClick={() => setShowKrw(false)}>JPY</button>
+            <button className="active currency-current" onClick={() => setShowKrw(!showKrw)}>
+              {showKrw ? 'KRW' : 'JPY'}
+            </button>
             <button className="swap-button" aria-label="통화 전환" onClick={() => setShowKrw(!showKrw)}>
               <RefreshCw size={13} />
             </button>
-            <button className={showKrw ? 'active' : ''} onClick={() => setShowKrw(true)}>KRW</button>
           </div>
           <label className="rate-field" aria-label="JPY KRW 환율">
             <span>₩</span>

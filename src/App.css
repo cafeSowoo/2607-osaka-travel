@@ -146,7 +146,6 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
   font-size: 13px;
   font-weight: 800;
 }
-.account-icon-button,
 .avatar-button {
   width: 38px;
   height: 38px;
@@ -158,7 +157,6 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
   background: var(--surface);
   color: var(--text);
 }
-.account-icon-button:hover,
 .avatar-button:hover { background: #f8fafc; }
 .avatar-button {
   overflow: hidden;
@@ -254,12 +252,12 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
   font-weight: 700;
 }
 .currency-switch button.active { color: var(--accent); background: #edf4ff; }
+.currency-switch .currency-current { min-width: 54px; }
 .currency-switch .swap-button {
   min-width: 32px;
   width: 32px;
   color: var(--muted);
   border-left: 1px solid var(--line);
-  border-right: 1px solid var(--line);
 }
 .rate-field {
   display: inline-flex;
@@ -558,7 +556,6 @@ textarea { min-height: 56px; resize: vertical; }
   .schedule-actions { justify-content: flex-start; }
   .account-cluster { margin-left: auto; }
   .login-pill { min-height: 34px; padding: 0 12px; }
-  .account-icon-button,
   .avatar-button { width: 34px; height: 34px; }
   .logout-chip { min-height: 34px; padding: 0 11px; }
   .day-tabs { grid-template-columns: repeat(5, minmax(82px, 1fr)); }
