@@ -1,5 +1,14 @@
-const CACHE_NAME = 'osaka-travel-desk-v2'
-const APP_SHELL = ['./', './index.html', './manifest.webmanifest', './pwa-icon.svg', './favicon.svg']
+const CACHE_NAME = 'osaka-travel-desk-v3'
+const APP_SHELL = [
+  './',
+  './index.html',
+  './manifest.webmanifest',
+  './favicon.svg',
+  './pwa-icon.svg',
+  './pwa-192.png',
+  './pwa-512.png',
+  './apple-touch-icon.png',
+]
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)))
