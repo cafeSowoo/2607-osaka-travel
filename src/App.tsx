@@ -183,14 +183,17 @@ function StatusStrip({
 
 function AccountStatus({ syncState, onLogout }: { syncState: SyncState; onLogout: () => void }) {
   const userInitial = syncState.user?.name?.trim().charAt(0) || '旅'
-  const statusLabel = syncState.configured ? '로그인됨' : '데모 모드'
+
+  if (!syncState.configured) {
+    return (
+      <div className="account-cluster">
+        <span className="login-pill">데모 모드</span>
+      </div>
+    )
+  }
 
   return (
     <div className="account-cluster">
-      <span className="login-pill">
-        <LogIn size={16} />
-        {statusLabel}
-      </span>
       <span className="avatar-button" title={syncState.user?.email || syncState.user?.name || '계정'}>
         {syncState.user?.avatarUrl ? (
           <img src={syncState.user.avatarUrl} alt="" referrerPolicy="no-referrer" />
