@@ -1,7 +1,7 @@
 import { createSeedData } from '../data/seed'
 import type { TravelData } from '../types'
 
-const STORAGE_KEY = 'osaka-travel-pwa:data:v3'
+const STORAGE_KEY = 'osaka-travel-pwa:data:v4'
 
 export const readLocalData = (): TravelData => {
   const raw = localStorage.getItem(STORAGE_KEY)

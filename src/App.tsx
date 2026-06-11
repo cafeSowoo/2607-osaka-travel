@@ -1,6 +1,7 @@
 import {
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   Circle,
   ClipboardCheck,
@@ -11,14 +12,20 @@ import {
   LogIn,
   LogOut,
   MapPin,
+  Pencil,
   Plane,
   Plus,
+  RefreshCw,
+  Search,
   Settings,
+  SlidersHorizontal,
   Sparkles,
   Table2,
   Trash2,
+  X,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react'
 import './App.css'
 import { categories } from './data/seed'
 import { useTravelData } from './hooks/useTravelData'
@@ -37,6 +44,52 @@ const views: Array<{ id: View; label: string; icon: typeof CalendarDays }> = [
 const formatJpy = (value: number) => `¥${Math.round(value).toLocaleString('ja-JP')}`
 const formatKrw = (value: number, rate: number) => `₩${Math.round(value * rate).toLocaleString('ko-KR')}`
 const normalizeTime = (value: string) => value.trim().slice(0, 5)
+const SCHEDULE_COLUMN_STORAGE_KEY = 'osaka-travel-pwa:schedule-column-widths:v1'
+
+const scheduleColumns = [
+  { id: 'time', label: '시간', defaultWidth: 118, minWidth: 96, maxWidth: 180 },
+  { id: 'place', label: '장소', defaultWidth: 150, minWidth: 120, maxWidth: 260 },
+  { id: 'category', label: '구분', defaultWidth: 78, minWidth: 68, maxWidth: 130 },
+  { id: 'title', label: '내용', defaultWidth: 110, minWidth: 96, maxWidth: 220 },
+  { id: 'note', label: '비고', defaultWidth: 118, minWidth: 104, maxWidth: 260 },
+  { id: 'budget', label: '예산', defaultWidth: 96, minWidth: 84, maxWidth: 150 },
+] as const
+
+type ScheduleColumnId = (typeof scheduleColumns)[number]['id']
+type ScheduleColumnWidths = Record<ScheduleColumnId, number>
+
+const defaultScheduleColumnWidths = scheduleColumns.reduce(
+  (widths, column) => ({ ...widths, [column.id]: column.defaultWidth }),
+  {} as ScheduleColumnWidths,
+)
+
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max)
+
+const readScheduleColumnWidths = () => {
+  const raw = localStorage.getItem(SCHEDULE_COLUMN_STORAGE_KEY)
+  if (!raw) return defaultScheduleColumnWidths
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<ScheduleColumnWidths>
+    return scheduleColumns.reduce(
+      (widths, column) => ({
+        ...widths,
+        [column.id]: clamp(Number(parsed[column.id] ?? column.defaultWidth), column.minWidth, column.maxWidth),
+      }),
+      {} as ScheduleColumnWidths,
+    )
+  } catch {
+    return defaultScheduleColumnWidths
+  }
+}
+
+const saveScheduleColumnWidths = (widths: ScheduleColumnWidths) => {
+  localStorage.setItem(SCHEDULE_COLUMN_STORAGE_KEY, JSON.stringify(widths))
+}
+
+const makeScheduleGridTemplate = (widths: ScheduleColumnWidths) => (
+  scheduleColumns.map((column) => `${widths[column.id]}px`).join(' ')
+)
 
 const getActiveTripDay = (days: TripDay[]) => {
   const today = new Date().toISOString().slice(0, 10)
@@ -44,6 +97,10 @@ const getActiveTripDay = (days: TripDay[]) => {
 }
 
 const makeTimeRange = (item: ItineraryItem) => `${item.startTime || '--:--'} ~ ${item.endTime || '--:--'}`
+const formatTabDate = (day: TripDay) => {
+  const [, month, date] = day.date.split('-')
+  return `${month}.${date} (${day.label.split(' ').at(-1) ?? ''})`
+}
 
 function AuthScreen({ login, configured }: { login: () => void; configured: boolean }) {
   return (
@@ -200,6 +257,7 @@ function TimelineItem({ item }: { item: ItineraryItem }) {
 function ScheduleView({
   days,
   items,
+  tripTitle,
   activeDay,
   setActiveDay,
   selectedItem,
@@ -207,12 +265,15 @@ function ScheduleView({
   readonly,
   exchangeRate,
   showKrw,
+  setShowKrw,
+  onExchangeRate,
   onAdd,
   onSave,
   onDelete,
 }: {
   days: TripDay[]
   items: ItineraryItem[]
+  tripTitle: string
   activeDay: number
   setActiveDay: (day: number) => void
   selectedItem: ItineraryItem | null
@@ -220,55 +281,145 @@ function ScheduleView({
   readonly: boolean
   exchangeRate: number
   showKrw: boolean
+  setShowKrw: (value: boolean) => void
+  onExchangeRate: (value: number) => void
   onAdd: () => void
   onSave: (item: ItineraryItem) => void
   onDelete: (id: string) => void
 }) {
-  const day = days.find((candidate) => candidate.dayIndex === activeDay) ?? days[0]
   const dayItems = items.filter((item) => item.dayIndex === activeDay)
+  const dayBudget = dayItems.reduce((sum, item) => sum + item.budgetJpy, 0)
+  const [columnWidths, setColumnWidths] = useState<ScheduleColumnWidths>(readScheduleColumnWidths)
+  const scheduleGridTemplate = useMemo(() => makeScheduleGridTemplate(columnWidths), [columnWidths])
+  const tableStyle = { '--schedule-columns': scheduleGridTemplate } as CSSProperties
+
+  const setColumnWidth = (columnId: ScheduleColumnId, width: number) => {
+    const column = scheduleColumns.find((candidate) => candidate.id === columnId)
+    if (!column) return
+    const nextWidth = clamp(width, column.minWidth, column.maxWidth)
+    setColumnWidths((current) => {
+      const next = { ...current, [columnId]: nextWidth }
+      saveScheduleColumnWidths(next)
+      return next
+    })
+  }
+
+  const startColumnResize = (columnId: ScheduleColumnId, event: ReactMouseEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    const column = scheduleColumns.find((candidate) => candidate.id === columnId)
+    if (!column) return
+
+    const startX = event.clientX
+    const startWidth = columnWidths[columnId]
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      setColumnWidth(columnId, startWidth + moveEvent.clientX - startX)
+    }
+
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+    }
+
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+  }
+
+  const handleColumnResizeKey = (columnId: ScheduleColumnId, event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    const step = event.shiftKey ? 20 : 10
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault()
+      setColumnWidth(columnId, columnWidths[columnId] - step)
+    }
+    if (event.key === 'ArrowRight') {
+      event.preventDefault()
+      setColumnWidth(columnId, columnWidths[columnId] + step)
+    }
+  }
 
   return (
-    <section className="schedule-layout">
-      <div className="schedule-main">
-        <div className="day-tabs">
-          {days.map((candidate) => (
-            <button key={candidate.dayIndex} className={candidate.dayIndex === activeDay ? 'active' : ''} onClick={() => setActiveDay(candidate.dayIndex)}>
-              {candidate.label}
-            </button>
-          ))}
-        </div>
-        <div className="table-toolbar">
-          <div>
-            <h2>{day.label}</h2>
-            <p>표처럼 빠르게 훑고, 상세 패널에서 편집합니다.</p>
-          </div>
-          <button className="primary-button" disabled={readonly} onClick={onAdd}>
-            <Plus size={17} />
-            일정 추가
+    <section className="schedule-screen">
+      <header className="schedule-header">
+        <div className="schedule-title">
+          <h1>{tripTitle}</h1>
+          <button className="text-icon-button" aria-label="여행 제목 편집">
+            <Pencil size={16} />
           </button>
         </div>
-        <div className="itinerary-table">
-          <div className="table-row head">
-            <span>시간</span>
-            <span>장소</span>
-            <span>구분</span>
-            <span>내용</span>
-            <span>비고</span>
-            <span>예산</span>
-          </div>
-          {dayItems.length ? dayItems.map((item) => (
-            <button key={item.id} className={`table-row ${selectedItem?.id === item.id ? 'selected' : ''}`} onClick={() => setSelectedItem(item)}>
-              <span>{makeTimeRange(item)}</span>
-              <span>{item.place || '장소 미정'}</span>
-              <span><CategoryBadge category={item.category} /></span>
-              <span>{item.title}</span>
-              <span>{item.note || '-'}</span>
-              <span>{showKrw ? formatKrw(item.budgetJpy, exchangeRate) : formatJpy(item.budgetJpy)}</span>
+        <div className="schedule-actions">
+          <button className="ghost-button compact">
+            <SlidersHorizontal size={15} />
+            환율 설정
+          </button>
+          <div className="currency-switch" aria-label="예산 통화">
+            <button className={!showKrw ? 'active' : ''} onClick={() => setShowKrw(false)}>JPY</button>
+            <button className="swap-button" aria-label="통화 전환" onClick={() => setShowKrw(!showKrw)}>
+              <RefreshCw size={13} />
             </button>
-          )) : <EmptyState text="이 날짜의 일정표가 비어 있습니다." />}
+            <button className={showKrw ? 'active' : ''} onClick={() => setShowKrw(true)}>KRW</button>
+          </div>
+          <label className="rate-field" aria-label="JPY KRW 환율">
+            <span>₩</span>
+            <input type="number" step="0.1" value={exchangeRate} onChange={(event) => onExchangeRate(Number(event.target.value))} />
+          </label>
+          <div className="split-add">
+            <button className="primary-button schedule-add" disabled={readonly} onClick={onAdd}>
+              일정 추가
+            </button>
+            <button className="primary-button add-menu" disabled={readonly} aria-label="일정 추가 옵션">
+              <ChevronDown size={17} />
+            </button>
+          </div>
         </div>
+      </header>
+
+      <div className="schedule-layout">
+        <div className="schedule-main">
+          <div className="day-tabs">
+            {days.map((candidate) => (
+              <button key={candidate.dayIndex} className={candidate.dayIndex === activeDay ? 'active' : ''} onClick={() => setActiveDay(candidate.dayIndex)}>
+                <span>{`Day${candidate.dayIndex}`}</span>
+                <small>{formatTabDate(candidate)}</small>
+              </button>
+            ))}
+          </div>
+          <div className="itinerary-table" style={tableStyle}>
+            <div className="table-row head">
+              {scheduleColumns.map((column) => (
+                <span key={column.id}>
+                  {column.id === 'budget' ? `${column.label} (${showKrw ? 'KRW' : 'JPY'})` : column.label}
+                  <button
+                    className="column-resizer"
+                    aria-label={`${column.label} 열 너비 조절`}
+                    title={`${column.label} 열 너비 조절: 드래그 또는 좌우 화살표`}
+                    onMouseDown={(event) => startColumnResize(column.id, event)}
+                    onKeyDown={(event) => handleColumnResizeKey(column.id, event)}
+                  />
+                </span>
+              ))}
+            </div>
+            {dayItems.length ? dayItems.map((item) => (
+              <button key={item.id} className={`table-row ${selectedItem?.id === item.id ? 'selected' : ''}`} onClick={() => setSelectedItem(item)}>
+                <span>{makeTimeRange(item)}</span>
+                <span>{item.place || '장소 미정'}</span>
+                <span><CategoryBadge category={item.category} /></span>
+                <span>{item.title}</span>
+                <span>{item.note || '-'}</span>
+                <span>{showKrw ? formatKrw(item.budgetJpy, exchangeRate) : item.budgetJpy.toLocaleString('ja-JP')}</span>
+              </button>
+            )) : <EmptyState text="이 날짜의 일정표가 비어 있습니다." />}
+            <button className="table-add-row" disabled={readonly} onClick={onAdd}>
+              <Plus size={16} />
+              일정 추가
+            </button>
+            <div className="table-total-row">
+              <span>합계</span>
+              <strong>{showKrw ? formatKrw(dayBudget, exchangeRate) : dayBudget.toLocaleString('ja-JP')}</strong>
+            </div>
+          </div>
+        </div>
+        <DetailPanel key={selectedItem?.id ?? 'empty'} item={selectedItem} readonly={readonly} exchangeRate={exchangeRate} onClose={() => setSelectedItem(null)} onSave={onSave} onDelete={onDelete} />
       </div>
-      <DetailPanel key={selectedItem?.id ?? 'empty'} item={selectedItem} readonly={readonly} onSave={onSave} onDelete={onDelete} />
     </section>
   )
 }
@@ -276,11 +427,15 @@ function ScheduleView({
 function DetailPanel({
   item,
   readonly,
+  exchangeRate,
+  onClose,
   onSave,
   onDelete,
 }: {
   item: ItineraryItem | null
   readonly: boolean
+  exchangeRate: number
+  onClose: () => void
   onSave: (item: ItineraryItem) => void
   onDelete: (id: string) => void
 }) {
@@ -303,13 +458,13 @@ function DetailPanel({
   return (
     <aside className="detail-panel">
       <div className="panel-header">
-        <h3>상세 편집</h3>
-        <button className="icon-button danger" disabled={readonly} onClick={() => onDelete(draft.id)} aria-label="일정 삭제">
-          <Trash2 size={17} />
+        <h3>일정 편집</h3>
+        <button className="icon-button plain" onClick={onClose} aria-label="편집 패널 닫기">
+          <X size={18} />
         </button>
       </div>
-      <label>내용<input value={draft.title} disabled={readonly} onChange={(event) => update({ title: event.target.value })} /></label>
-      <div className="two-cols">
+      <label>시간</label>
+      <div className="two-cols time-cols">
         <label>시작<input value={draft.startTime} inputMode="numeric" pattern="[0-9]{2}:[0-9]{2}" maxLength={5} placeholder="09:00" disabled={readonly} onChange={(event) => update({ startTime: event.target.value })} /></label>
         <label>종료<input value={draft.endTime} inputMode="numeric" pattern="[0-9]{2}:[0-9]{2}" maxLength={5} placeholder="10:00" disabled={readonly} onChange={(event) => update({ endTime: event.target.value })} /></label>
       </div>
@@ -317,11 +472,20 @@ function DetailPanel({
       <label>구분<select value={draft.category} disabled={readonly} onChange={(event) => update({ category: event.target.value as Category })}>
         {categories.map((category) => <option key={category}>{category}</option>)}
       </select></label>
+      <label>내용<input value={draft.title} disabled={readonly} onChange={(event) => update({ title: event.target.value })} /></label>
       <label>비고<textarea value={draft.note} disabled={readonly} onChange={(event) => update({ note: event.target.value })} /></label>
       <label>예산 JPY<input type="number" min="0" value={draft.budgetJpy} disabled={readonly} onChange={(event) => update({ budgetJpy: Number(event.target.value) })} /></label>
+      <span className="krw-preview">≈ {formatKrw(draft.budgetJpy, exchangeRate)}</span>
+      <label>장소 추가 (Google)<div className="search-control"><Search size={15} /><input disabled placeholder="장소 검색 (기능은 v2에서 제공)" /></div></label>
       <label>Google 장소 검색어<input value={draft.googlePlaceQuery} disabled={readonly} onChange={(event) => update({ googlePlaceQuery: event.target.value })} /></label>
-      <button className="ghost-button" disabled>장소 추가 · v1 준비 중</button>
-      <button className="primary-button full" disabled={readonly} onClick={() => onSave({ ...draft, startTime: normalizeTime(draft.startTime), endTime: normalizeTime(draft.endTime) })}>저장</button>
+      <div className="detail-actions">
+        <button className="ghost-button danger" disabled={readonly} onClick={() => onDelete(draft.id)}>
+          <Trash2 size={16} />
+          삭제
+        </button>
+        <button className="ghost-button" onClick={onClose}>취소</button>
+        <button className="primary-button" disabled={readonly} onClick={() => onSave({ ...draft, startTime: normalizeTime(draft.startTime), endTime: normalizeTime(draft.endTime) })}>저장</button>
+      </div>
     </aside>
   )
 }
@@ -505,7 +669,7 @@ function App() {
     <div className="app-shell">
       <ShellNav activeView={activeView} setActiveView={navigate} />
       <main className="workspace">
-        <StatusStrip message={syncState.message} offline={syncState.offline} readonly={syncState.readonly} onRefresh={refresh} onLogout={logout} />
+        {activeView !== 'schedule' && <StatusStrip message={syncState.message} offline={syncState.offline} readonly={syncState.readonly} onRefresh={refresh} onLogout={logout} />}
         {activeView === 'today' && (
           <TodayView
             day={todayDay}
@@ -521,6 +685,7 @@ function App() {
           <ScheduleView
             days={data.days}
             items={data.itineraryItems}
+            tripTitle={data.trip.title}
             activeDay={activeDay}
             setActiveDay={setActiveDay}
             selectedItem={selectedItem}
@@ -528,6 +693,8 @@ function App() {
             readonly={syncState.readonly}
             exchangeRate={data.trip.exchangeRate}
             showKrw={showKrw}
+            setShowKrw={setShowKrw}
+            onExchangeRate={(exchangeRate) => updateTrip({ ...data.trip, exchangeRate })}
             onAdd={addItem}
             onSave={saveItem}
             onDelete={deleteItem}
