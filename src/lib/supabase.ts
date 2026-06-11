@@ -1,0 +1,237 @@
+import { createClient, type Session, type SupabaseClient } from '@supabase/supabase-js'
+import { createSeedData, seedTrip, tripDays } from '../data/seed'
+import type { ChecklistItem, ItineraryItem, Reservation, TravelData, Trip } from '../types'
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+
+export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey)
+
+export const supabase: SupabaseClient | null = isSupabaseConfigured
+  ? createClient(supabaseUrl!, supabaseAnonKey!, {
+      auth: { persistSession: true, autoRefreshToken: true },
+    })
+  : null
+
+type TripRow = {
+  id: string
+  title: string
+  destination: string
+  start_date: string
+  end_date: string
+  exchange_rate: number | string
+}
+
+type ItineraryRow = {
+  id: string
+  trip_id: string
+  day_index: number
+  date: string
+  start_time: string | null
+  end_time: string | null
+  place: string | null
+  category: ItineraryItem['category']
+  title: string | null
+  note: string | null
+  budget_jpy: number | string | null
+  google_place_query: string | null
+  sort_order: number | null
+}
+
+type ReservationRow = {
+  id: string
+  trip_id: string
+  kind: Reservation['kind']
+  title: string
+  reference: string
+  primary_date: string
+  subtitle: string | null
+  details: string[] | null
+  meta: Record<string, string> | null
+  sort_order: number | null
+}
+
+type ChecklistRow = {
+  id: string
+  trip_id: string
+  section: ChecklistItem['section']
+  title: string
+  done: boolean
+  sort_order: number | null
+}
+
+const fromTrip = (row: TripRow): Trip => ({
+  id: row.id,
+  title: row.title,
+  destination: row.destination,
+  startDate: row.start_date,
+  endDate: row.end_date,
+  exchangeRate: Number(row.exchange_rate),
+})
+
+const toTrip = (trip: Trip, userId: string) => ({
+  id: trip.id,
+  user_id: userId,
+  title: trip.title,
+  destination: trip.destination,
+  start_date: trip.startDate,
+  end_date: trip.endDate,
+  exchange_rate: trip.exchangeRate,
+})
+
+const fromItinerary = (row: ItineraryRow): ItineraryItem => ({
+  id: row.id,
+  tripId: row.trip_id,
+  dayIndex: row.day_index,
+  date: row.date,
+  startTime: row.start_time ?? '',
+  endTime: row.end_time ?? '',
+  place: row.place ?? '',
+  category: row.category,
+  title: row.title ?? '',
+  note: row.note ?? '',
+  budgetJpy: Number(row.budget_jpy ?? 0),
+  googlePlaceQuery: row.google_place_query ?? '',
+  sortOrder: row.sort_order ?? 0,
+})
+
+const toItinerary = (item: ItineraryItem, userId: string) => ({
+  id: item.id,
+  user_id: userId,
+  trip_id: item.tripId,
+  day_index: item.dayIndex,
+  date: item.date,
+  start_time: item.startTime || null,
+  end_time: item.endTime || null,
+  place: item.place,
+  category: item.category,
+  title: item.title,
+  note: item.note,
+  budget_jpy: item.budgetJpy,
+  google_place_query: item.googlePlaceQuery,
+  sort_order: item.sortOrder,
+})
+
+const fromReservation = (row: ReservationRow): Reservation => ({
+  id: row.id,
+  tripId: row.trip_id,
+  kind: row.kind,
+  title: row.title,
+  reference: row.reference,
+  primaryDate: row.primary_date,
+  subtitle: row.subtitle ?? '',
+  details: row.details ?? [],
+  meta: row.meta ?? {},
+  sortOrder: row.sort_order ?? 0,
+})
+
+const toReservation = (reservation: Reservation, userId: string) => ({
+  id: reservation.id,
+  user_id: userId,
+  trip_id: reservation.tripId,
+  kind: reservation.kind,
+  title: reservation.title,
+  reference: reservation.reference,
+  primary_date: reservation.primaryDate,
+  subtitle: reservation.subtitle,
+  details: reservation.details,
+  meta: reservation.meta,
+  sort_order: reservation.sortOrder,
+})
+
+const fromChecklist = (row: ChecklistRow): ChecklistItem => ({
+  id: row.id,
+  tripId: row.trip_id,
+  section: row.section,
+  title: row.title,
+  done: row.done,
+  sortOrder: row.sort_order ?? 0,
+})
+
+const toChecklist = (item: ChecklistItem, userId: string) => ({
+  id: item.id,
+  user_id: userId,
+  trip_id: item.tripId,
+  section: item.section,
+  title: item.title,
+  done: item.done,
+  sort_order: item.sortOrder,
+})
+
+export const getSession = async (): Promise<Session | null> => {
+  if (!supabase) return null
+  const { data } = await supabase.auth.getSession()
+  return data.session
+}
+
+export const signInWithGoogle = async () => {
+  if (!supabase) return
+  await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.origin + window.location.pathname },
+  })
+}
+
+export const signOut = async () => {
+  if (!supabase) return
+  await supabase.auth.signOut()
+}
+
+export const loadSupabaseData = async (session: Session): Promise<TravelData> => {
+  if (!supabase) return createSeedData()
+  const userId = session.user.id
+
+  const { data: existingTrips, error: tripLookupError } = await supabase.from('trips').select('*').eq('id', seedTrip.id).limit(1)
+  if (tripLookupError) throw tripLookupError
+
+  if (!existingTrips?.length) {
+    const seed = createSeedData()
+    await supabase.from('trips').upsert(toTrip(seed.trip, userId))
+    await supabase.from('reservations').upsert(seed.reservations.map((reservation) => toReservation(reservation, userId)))
+    await supabase.from('checklist_items').upsert(seed.checklistItems.map((item) => toChecklist(item, userId)))
+  }
+
+  const [trip, itinerary, reservations, checklist] = await Promise.all([
+    supabase.from('trips').select('*').eq('id', seedTrip.id).single(),
+    supabase.from('itinerary_items').select('*').eq('trip_id', seedTrip.id).order('day_index').order('sort_order'),
+    supabase.from('reservations').select('*').eq('trip_id', seedTrip.id).order('sort_order'),
+    supabase.from('checklist_items').select('*').eq('trip_id', seedTrip.id).order('sort_order'),
+  ])
+
+  if (trip.error) throw trip.error
+  if (itinerary.error) throw itinerary.error
+  if (reservations.error) throw reservations.error
+  if (checklist.error) throw checklist.error
+
+  return {
+    trip: fromTrip(trip.data as TripRow),
+    days: tripDays,
+    itineraryItems: ((itinerary.data ?? []) as ItineraryRow[]).map(fromItinerary),
+    reservations: ((reservations.data ?? []) as ReservationRow[]).map(fromReservation),
+    checklistItems: ((checklist.data ?? []) as ChecklistRow[]).map(fromChecklist),
+  }
+}
+
+export const saveTrip = async (trip: Trip, session: Session) => {
+  if (!supabase) return
+  const { error } = await supabase.from('trips').upsert(toTrip(trip, session.user.id))
+  if (error) throw error
+}
+
+export const saveItineraryItem = async (item: ItineraryItem, session: Session) => {
+  if (!supabase) return
+  const { error } = await supabase.from('itinerary_items').upsert(toItinerary(item, session.user.id))
+  if (error) throw error
+}
+
+export const deleteItineraryItem = async (id: string) => {
+  if (!supabase) return
+  const { error } = await supabase.from('itinerary_items').delete().eq('id', id)
+  if (error) throw error
+}
+
+export const saveChecklistItem = async (item: ChecklistItem, session: Session) => {
+  if (!supabase) return
+  const { error } = await supabase.from('checklist_items').upsert(toChecklist(item, session.user.id))
+  if (error) throw error
+}
