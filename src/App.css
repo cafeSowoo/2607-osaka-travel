@@ -127,6 +127,67 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .text-icon-button { min-height: 26px; border: 0; background: transparent; color: var(--muted); display: inline-grid; place-items: center; }
 .full { width: 100%; }
 
+.account-cluster {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.login-pill {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border: 1px solid #b9d4d5;
+  border-radius: 999px;
+  background: #eefafa;
+  color: #10656b;
+  font-size: 13px;
+  font-weight: 800;
+}
+.account-icon-button,
+.avatar-button {
+  width: 38px;
+  height: 38px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+}
+.account-icon-button:hover,
+.avatar-button:hover { background: #f8fafc; }
+.avatar-button {
+  overflow: hidden;
+  border-color: transparent;
+  background: linear-gradient(135deg, #d7ede2, #b8d8ff);
+  color: #164e63;
+  font-weight: 850;
+}
+.avatar-button img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.logout-chip {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid #fecaca;
+  border-radius: 999px;
+  background: #fff7f7;
+  color: var(--danger);
+  font-size: 13px;
+  font-weight: 800;
+}
+.logout-chip:hover { background: #fee2e2; }
+
 .view-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .today-grid { grid-template-columns: minmax(0, 1.5fr) minmax(180px, 0.5fr) minmax(180px, 0.5fr); }
 .today-timeline-view { display: grid; gap: 14px; }
@@ -495,6 +556,11 @@ textarea { min-height: 56px; resize: vertical; }
   .today-grid, .view-grid, .schedule-layout, .checklist-board, .settings-grid { grid-template-columns: 1fr; }
   .schedule-header { display: grid; gap: 14px; }
   .schedule-actions { justify-content: flex-start; }
+  .account-cluster { margin-left: auto; }
+  .login-pill { min-height: 34px; padding: 0 12px; }
+  .account-icon-button,
+  .avatar-button { width: 34px; height: 34px; }
+  .logout-chip { min-height: 34px; padding: 0 11px; }
   .day-tabs { grid-template-columns: repeat(5, minmax(82px, 1fr)); }
   .wide { grid-column: auto; }
   .itinerary-table { border: 0; background: transparent; display: grid; gap: 10px; }

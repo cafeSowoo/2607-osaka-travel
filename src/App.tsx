@@ -5,6 +5,7 @@ import {
   ChevronRight,
   Circle,
   ClipboardCheck,
+  Bell,
   Cloud,
   CloudOff,
   Hotel,
@@ -28,7 +29,7 @@ import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MouseEvent as 
 import './App.css'
 import { categories } from './data/seed'
 import { useTravelData } from './hooks/useTravelData'
-import type { Category, ItineraryItem, Reservation, TripDay } from './types'
+import type { Category, ItineraryItem, Reservation, SyncState, TripDay } from './types'
 
 type View = 'schedule' | 'reservations' | 'checklist' | 'settings'
 
@@ -153,12 +154,14 @@ function StatusStrip({
   readonly,
   onRefresh,
   onLogout,
+  syncState,
 }: {
   message: string
   offline: boolean
   readonly: boolean
   onRefresh: () => void
   onLogout: () => void
+  syncState: SyncState
 }) {
   return (
     <header className="topbar">
@@ -172,11 +175,37 @@ function StatusStrip({
           {readonly ? '오프라인 읽기 전용' : message}
         </span>
         <button className="ghost-button" onClick={onRefresh}>새로고침</button>
-        <button className="icon-button" aria-label="로그아웃" onClick={onLogout}>
-          <LogOut size={18} />
-        </button>
+        <AccountStatus syncState={syncState} onLogout={onLogout} />
       </div>
     </header>
+  )
+}
+
+function AccountStatus({ syncState, onLogout }: { syncState: SyncState; onLogout: () => void }) {
+  const userInitial = syncState.user?.name?.trim().charAt(0) || '旅'
+  const statusLabel = syncState.configured ? '로그인됨' : '데모 모드'
+
+  return (
+    <div className="account-cluster">
+      <span className="login-pill">
+        <LogIn size={16} />
+        {statusLabel}
+      </span>
+      <button className="account-icon-button" type="button" aria-label="알림">
+        <Bell size={17} />
+      </button>
+      <span className="avatar-button" title={syncState.user?.email || syncState.user?.name || '계정'}>
+        {syncState.user?.avatarUrl ? (
+          <img src={syncState.user.avatarUrl} alt="" referrerPolicy="no-referrer" />
+        ) : (
+          <span>{userInitial}</span>
+        )}
+      </span>
+      <button className="logout-chip" type="button" onClick={onLogout}>
+        <LogOut size={16} />
+        로그아웃
+      </button>
+    </div>
   )
 }
 
@@ -196,6 +225,8 @@ function ScheduleView({
   onAdd,
   onSave,
   onDelete,
+  syncState,
+  onLogout,
 }: {
   days: TripDay[]
   items: ItineraryItem[]
@@ -212,6 +243,8 @@ function ScheduleView({
   onAdd: () => void
   onSave: (item: ItineraryItem) => void
   onDelete: (id: string) => void
+  syncState: SyncState
+  onLogout: () => void
 }) {
   const dayItems = items.filter((item) => item.dayIndex === activeDay)
   const dayBudget = dayItems.reduce((sum, item) => sum + item.budgetJpy, 0)
@@ -296,6 +329,7 @@ function ScheduleView({
               <ChevronDown size={17} />
             </button>
           </div>
+          <AccountStatus syncState={syncState} onLogout={onLogout} />
         </div>
       </header>
 
@@ -613,7 +647,7 @@ function App() {
     <div className="app-shell">
       <ShellNav activeView={activeView} setActiveView={navigate} />
       <main className="workspace">
-        {activeView !== 'schedule' && <StatusStrip message={syncState.message} offline={syncState.offline} readonly={syncState.readonly} onRefresh={refresh} onLogout={logout} />}
+        {activeView !== 'schedule' && <StatusStrip message={syncState.message} offline={syncState.offline} readonly={syncState.readonly} onRefresh={refresh} onLogout={logout} syncState={syncState} />}
         {activeView === 'schedule' && (
           <ScheduleView
             days={data.days}
@@ -631,6 +665,8 @@ function App() {
             onAdd={addItem}
             onSave={saveItem}
             onDelete={deleteItem}
+            syncState={syncState}
+            onLogout={logout}
           />
         )}
         {activeView === 'reservations' && <ReservationsView reservations={data.reservations} />}

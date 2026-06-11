@@ -27,6 +27,7 @@ export const useTravelData = () => {
   const [message, setMessage] = useState('로컬 데이터를 준비했어요.')
 
   const readonly = !online
+  const userMetadata = session?.user.user_metadata as Record<string, string | undefined> | undefined
 
   const syncState: SyncState = useMemo(
     () => ({
@@ -36,8 +37,13 @@ export const useTravelData = () => {
       offline: !online,
       readonly,
       message,
+      user: session ? {
+        name: userMetadata?.full_name ?? userMetadata?.name ?? session.user.email ?? '사용자',
+        email: session.user.email ?? '',
+        avatarUrl: userMetadata?.avatar_url ?? userMetadata?.picture ?? '',
+      } : null,
     }),
-    [demoMode, loading, message, online, readonly, session],
+    [demoMode, loading, message, online, readonly, session, userMetadata],
   )
 
   const refresh = useCallback(async () => {

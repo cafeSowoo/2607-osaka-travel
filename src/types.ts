@@ -70,4 +70,9 @@ export type SyncState = {
   offline: boolean
   readonly: boolean
   message: string
+  user: {
+    name: string
+    email: string
+    avatarUrl: string
+  } | null
 }
