@@ -13,6 +13,7 @@ import {
   LogOut,
   Luggage,
   MapPin,
+  PencilLine,
   Plane,
   Plus,
   RefreshCw,
@@ -594,19 +595,21 @@ function DetailPanel({
       <form className="ai-fill-form" onSubmit={fillWithAi}>
         <label className="ai-fill-label">
           <span>AI로 채우기</span>
-          <div className="ai-fill-control">
-            <Sparkles size={15} />
-            <input
-              value={aiCommand}
-              disabled={readonly || aiLoading}
-              placeholder="예: 18:30 신세카이 스시 저녁, 예산 5000엔"
-              onChange={(event) => setAiCommand(event.target.value)}
-            />
+          <div className="ai-fill-row">
+            <div className="ai-fill-control">
+              <Sparkles size={15} />
+              <input
+                value={aiCommand}
+                disabled={readonly || aiLoading}
+                placeholder="예: 18:30 신세카이 스시 저녁, 예산 5000엔"
+                onChange={(event) => setAiCommand(event.target.value)}
+              />
+            </div>
+            <button className="ghost-button ai-fill-button" type="submit" aria-label="AI로 채우기" title="AI로 채우기" disabled={readonly || aiLoading || !aiCommand.trim()}>
+              <PencilLine size={18} />
+            </button>
           </div>
         </label>
-        <button className="ghost-button ai-fill-button" type="submit" disabled={readonly || aiLoading || !aiCommand.trim()}>
-          {aiLoading ? '분석 중' : '채우기'}
-        </button>
         {aiError && <p className="ai-fill-error">{aiError}</p>}
       </form>
       <div className="detail-field detail-time-field">
