@@ -1,10 +1,10 @@
-const CACHE_NAME = 'osaka-travel-desk-v3'
+const CACHE_NAME = 'osaka-travel-desk-v4'
 const APP_SHELL = [
   './',
   './index.html',
   './manifest.webmanifest',
-  './favicon.svg',
-  './pwa-icon.svg',
+  './favicon.png',
+  './app-icon.png',
   './pwa-192.png',
   './pwa-512.png',
   './apple-touch-icon.png',
