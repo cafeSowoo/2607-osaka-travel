@@ -18,6 +18,7 @@ import {
   RefreshCw,
   Search,
   Settings,
+  Sparkles,
   Trash2,
   X,
 } from 'lucide-react'
@@ -34,6 +35,7 @@ import type {
 import './App.css'
 import { categories } from './data/seed'
 import { useTravelData } from './hooks/useTravelData'
+import { fillItineraryWithAi } from './lib/supabase'
 import type { Category, ChecklistItem, ChecklistItemKind, ItineraryItem, Reservation, SyncState, TripDay } from './types'
 
 type View = 'schedule' | 'reservations' | 'checklist' | 'settings'
@@ -473,6 +475,9 @@ function DetailPanel({
   variant?: 'desktop' | 'mobile'
 }) {
   const [draft, setDraft] = useState<ItineraryItem | null>(item)
+  const [aiCommand, setAiCommand] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState('')
   const dragStartY = useRef<number | null>(null)
   const pointerStartY = useRef<number | null>(null)
   const dragOffsetRef = useRef(0)
@@ -542,6 +547,23 @@ function DetailPanel({
     setDraft((current) => (current ? { ...current, ...patch } : current))
   }
 
+  const fillWithAi = async (event: ReactFormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const cleanCommand = aiCommand.trim()
+    if (!cleanCommand || !draft || aiLoading) return
+
+    setAiLoading(true)
+    setAiError('')
+    try {
+      const patch = await fillItineraryWithAi(cleanCommand, draft)
+      update(patch)
+    } catch (error) {
+      setAiError(error instanceof Error ? error.message : 'AI로 내용을 채우지 못했습니다.')
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
   return (
     <aside
       className={panelClassName}
@@ -566,6 +588,24 @@ function DetailPanel({
           </button>
         )}
       </div>
+      <form className="ai-fill-form" onSubmit={fillWithAi}>
+        <label className="ai-fill-label">
+          <span>AI로 채우기</span>
+          <div className="ai-fill-control">
+            <Sparkles size={15} />
+            <input
+              value={aiCommand}
+              disabled={readonly || aiLoading}
+              placeholder="예: 18:30 신세카이 스시 저녁, 예산 5000엔"
+              onChange={(event) => setAiCommand(event.target.value)}
+            />
+          </div>
+        </label>
+        <button className="ghost-button ai-fill-button" type="submit" disabled={readonly || aiLoading || !aiCommand.trim()}>
+          {aiLoading ? '분석 중' : '채우기'}
+        </button>
+        {aiError && <p className="ai-fill-error">{aiError}</p>}
+      </form>
       <div className="detail-field detail-time-field">
         <span className="detail-field-label">시간</span>
         <div className="detail-time-inputs">

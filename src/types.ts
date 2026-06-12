@@ -33,6 +33,11 @@ export type ItineraryItem = {
   sortOrder: number
 }
 
+export type ItineraryAiPatch = Partial<Pick<
+  ItineraryItem,
+  'startTime' | 'endTime' | 'place' | 'category' | 'title' | 'note' | 'budgetJpy' | 'googlePlaceQuery'
+>>
+
 export type Reservation = {
   id: string
   tripId: string

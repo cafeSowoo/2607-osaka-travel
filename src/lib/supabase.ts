@@ -1,11 +1,22 @@
 import { createClient, type Session, type SupabaseClient } from '@supabase/supabase-js'
-import { createSeedData, seedTrip, tripDays } from '../data/seed'
-import type { ChecklistItem, ItineraryItem, Reservation, TravelData, Trip } from '../types'
+import { categories, createSeedData, seedTrip, tripDays } from '../data/seed'
+import type { Category, ChecklistItem, ItineraryAiPatch, ItineraryItem, Reservation, TravelData, Trip } from '../types'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey)
+
+const isCategory = (value: unknown): value is Category => categories.includes(value as Category)
+const readString = (value: unknown) => (typeof value === 'string' ? value.trim() : undefined)
+const readTime = (value: unknown) => {
+  const text = readString(value)
+  return text && /^\d{2}:\d{2}$/.test(text) ? text : undefined
+}
+const readBudget = (value: unknown) => {
+  const amount = Number(value)
+  return Number.isFinite(amount) && amount >= 0 ? Math.round(amount) : undefined
+}
 
 const TABLES = {
   trips: 'osaka_trips',
@@ -251,4 +262,58 @@ export const deleteChecklistItem = async (id: string) => {
   if (!supabase) return
   const { error } = await supabase.from(TABLES.checklistItems).delete().eq('id', id)
   if (error) throw error
+}
+
+export const fillItineraryWithAi = async (command: string, currentItem: ItineraryItem): Promise<ItineraryAiPatch> => {
+  if (!supabase) throw new Error('AI 기능은 Supabase 연결 후 사용할 수 있습니다.')
+
+  const { data, error } = await supabase.functions.invoke('parse-itinerary-command', {
+    body: {
+      command,
+      currentItem: {
+        dayIndex: currentItem.dayIndex,
+        date: currentItem.date,
+        startTime: currentItem.startTime,
+        endTime: currentItem.endTime,
+        place: currentItem.place,
+        category: currentItem.category,
+        title: currentItem.title,
+        note: currentItem.note,
+        budgetJpy: currentItem.budgetJpy,
+        googlePlaceQuery: currentItem.googlePlaceQuery,
+      },
+      categories,
+      trip: {
+        title: seedTrip.title,
+        destination: seedTrip.destination,
+        startDate: seedTrip.startDate,
+        endDate: seedTrip.endDate,
+      },
+    },
+  })
+
+  if (error) throw error
+  if (!data || typeof data !== 'object') throw new Error('AI 응답 형식이 올바르지 않습니다.')
+
+  const response = data as Record<string, unknown>
+  const patch: ItineraryAiPatch = {}
+  const startTime = readTime(response.startTime)
+  const endTime = readTime(response.endTime)
+  const place = readString(response.place)
+  const category = response.category
+  const title = readString(response.title)
+  const note = readString(response.note)
+  const budgetJpy = readBudget(response.budgetJpy)
+  const googlePlaceQuery = readString(response.googlePlaceQuery)
+
+  if (startTime) patch.startTime = startTime
+  if (endTime) patch.endTime = endTime
+  if (place !== undefined) patch.place = place
+  if (isCategory(category)) patch.category = category
+  if (title !== undefined) patch.title = title
+  if (note !== undefined) patch.note = note
+  if (budgetJpy !== undefined) patch.budgetJpy = budgetJpy
+  if (googlePlaceQuery !== undefined) patch.googlePlaceQuery = googlePlaceQuery
+
+  return patch
 }
