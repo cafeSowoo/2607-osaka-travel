@@ -28,6 +28,8 @@ import type {
   FormEvent as ReactFormEvent,
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent,
+  TouchEvent as ReactTouchEvent,
 } from 'react'
 import './App.css'
 import { categories } from './data/seed'
@@ -53,6 +55,7 @@ const formatJpy = (value: number) => `¥${value.toLocaleString('ja-JP')}`
 const formatKrw = (value: number, rate: number) => `₩${Math.round(value * rate).toLocaleString('ko-KR')}`
 const formatBudget = (value: number, showKrw: boolean, rate: number) => showKrw ? formatKrw(value, rate) : formatJpy(value)
 const normalizeTime = (value: string) => value.trim().slice(0, 5)
+const isMobileViewport = () => window.matchMedia('(max-width: 980px)').matches
 const SCHEDULE_COLUMN_STORAGE_KEY = 'osaka-travel-pwa:schedule-column-widths:v1'
 
 const scheduleColumns = [
@@ -373,6 +376,18 @@ function ScheduleView({
       <div className="schedule-layout">
         <div className="schedule-main">
           {dayTabs('desktop-day-tabs')}
+          {selectedItem && (
+            <DetailPanel
+              key={`mobile-${selectedItem.id}`}
+              item={selectedItem}
+              readonly={readonly}
+              exchangeRate={exchangeRate}
+              onClose={() => setSelectedItem(null)}
+              onSave={onSave}
+              onDelete={onDelete}
+              variant="mobile"
+            />
+          )}
           <div className="itinerary-table" style={tableStyle}>
             <div className="table-row head">
               {scheduleColumns.map((column) => (
@@ -414,7 +429,7 @@ function ScheduleView({
             </div>
           </div>
         </div>
-        <DetailPanel key={selectedItem?.id ?? 'empty'} item={selectedItem} readonly={readonly} exchangeRate={exchangeRate} onClose={() => setSelectedItem(null)} onSave={onSave} onDelete={onDelete} />
+        <DetailPanel key={selectedItem?.id ?? 'empty'} item={selectedItem} readonly={readonly} exchangeRate={exchangeRate} onClose={() => setSelectedItem(null)} onSave={onSave} onDelete={onDelete} variant="desktop" />
       </div>
     </section>
   )
@@ -427,6 +442,7 @@ function DetailPanel({
   onClose,
   onSave,
   onDelete,
+  variant = 'desktop',
 }: {
   item: ItineraryItem | null
   readonly: boolean
@@ -434,12 +450,67 @@ function DetailPanel({
   onClose: () => void
   onSave: (item: ItineraryItem) => void
   onDelete: (id: string) => void
+  variant?: 'desktop' | 'mobile'
 }) {
   const [draft, setDraft] = useState<ItineraryItem | null>(item)
+  const dragStartY = useRef<number | null>(null)
+  const pointerStartY = useRef<number | null>(null)
+  const dragOffsetRef = useRef(0)
+  const [dragOffset, setDragOffset] = useState(0)
+  const mobilePanel = variant === 'mobile'
+
+  const updateDragOffset = (value: number) => {
+    dragOffsetRef.current = value
+    setDragOffset(value)
+  }
+
+  const startDetailDrag = (event: ReactTouchEvent<HTMLElement>) => {
+    if (!mobilePanel) return
+    dragStartY.current = event.touches[0]?.clientY ?? null
+    updateDragOffset(0)
+  }
+
+  const moveDetailDrag = (event: ReactTouchEvent<HTMLElement>) => {
+    if (!mobilePanel || dragStartY.current === null) return
+    const nextY = event.touches[0]?.clientY
+    if (nextY === undefined) return
+    const distance = nextY - dragStartY.current
+    updateDragOffset(distance > 0 ? Math.min(distance, 140) : 0)
+  }
+
+  const endDetailDrag = () => {
+    if (!mobilePanel) return
+    const shouldClose = dragOffsetRef.current > 72
+    dragStartY.current = null
+    pointerStartY.current = null
+    updateDragOffset(0)
+    if (shouldClose) onClose()
+  }
+
+  const startPointerDrag = (event: ReactPointerEvent<HTMLElement>) => {
+    if (!mobilePanel) return
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    pointerStartY.current = event.clientY
+    updateDragOffset(0)
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+  }
+
+  const movePointerDrag = (event: ReactPointerEvent<HTMLElement>) => {
+    if (!mobilePanel || pointerStartY.current === null) return
+    const distance = event.clientY - pointerStartY.current
+    updateDragOffset(distance > 0 ? Math.min(distance, 140) : 0)
+  }
+
+  const panelClassName = [
+    'detail-panel',
+    mobilePanel ? 'mobile-detail-panel' : 'desktop-detail-panel',
+    dragOffset > 0 ? 'dragging' : '',
+  ].filter(Boolean).join(' ')
+  const panelStyle = mobilePanel ? { '--detail-drag-offset': `${dragOffset}px` } as CSSProperties : undefined
 
   if (!draft) {
     return (
-      <aside className="detail-panel empty">
+      <aside className={`${panelClassName} empty`}>
         <MapPin size={22} />
         <h3>일정을 선택하세요</h3>
         <p>PC에서는 여기서 빠르게 수정하고, 모바일에서는 바텀시트처럼 표시됩니다.</p>
@@ -452,28 +523,67 @@ function DetailPanel({
   }
 
   return (
-    <aside className="detail-panel">
+    <aside
+      className={panelClassName}
+      style={panelStyle}
+      onTouchStart={startDetailDrag}
+      onTouchMove={moveDetailDrag}
+      onTouchEnd={endDetailDrag}
+      onTouchCancel={endDetailDrag}
+      onPointerDown={startPointerDrag}
+      onPointerMove={movePointerDrag}
+      onPointerUp={endDetailDrag}
+      onPointerCancel={endDetailDrag}
+    >
       <div className="panel-header">
         <h3>일정 편집</h3>
-        <button className="icon-button plain" onClick={onClose} aria-label="편집 패널 닫기">
-          <X size={18} />
-        </button>
+        {!mobilePanel && (
+          <button className="icon-button plain" onClick={onClose} aria-label="편집 패널 닫기">
+            <X size={18} />
+          </button>
+        )}
       </div>
-      <label>시간</label>
-      <div className="two-cols time-cols">
-        <label>시작<input value={draft.startTime} inputMode="numeric" pattern="[0-9]{2}:[0-9]{2}" maxLength={5} placeholder="09:00" disabled={readonly} onChange={(event) => update({ startTime: event.target.value })} /></label>
-        <label>종료<input value={draft.endTime} inputMode="numeric" pattern="[0-9]{2}:[0-9]{2}" maxLength={5} placeholder="10:00" disabled={readonly} onChange={(event) => update({ endTime: event.target.value })} /></label>
+      <div className="detail-field detail-time-field">
+        <span className="detail-field-label">시간</span>
+        <div className="detail-time-inputs">
+          <input aria-label="시작 시간" value={draft.startTime} inputMode="numeric" pattern="[0-9]{2}:[0-9]{2}" maxLength={5} placeholder="09:00" disabled={readonly} onChange={(event) => update({ startTime: event.target.value })} />
+          <span className="detail-time-separator">~</span>
+          <input aria-label="종료 시간" value={draft.endTime} inputMode="numeric" pattern="[0-9]{2}:[0-9]{2}" maxLength={5} placeholder="10:00" disabled={readonly} onChange={(event) => update({ endTime: event.target.value })} />
+        </div>
       </div>
-      <label>장소<input value={draft.place} disabled={readonly} onChange={(event) => update({ place: event.target.value })} /></label>
-      <label>구분<select value={draft.category} disabled={readonly} onChange={(event) => update({ category: event.target.value as Category })}>
-        {categories.map((category) => <option key={category}>{category}</option>)}
-      </select></label>
-      <label>내용<input value={draft.title} disabled={readonly} onChange={(event) => update({ title: event.target.value })} /></label>
-      <label>비고<textarea value={draft.note} disabled={readonly} onChange={(event) => update({ note: event.target.value })} /></label>
-      <label>예산 JPY<input type="number" min="0" value={draft.budgetJpy} disabled={readonly} onChange={(event) => update({ budgetJpy: Number(event.target.value) })} /></label>
-      <span className="krw-preview">≈ {formatKrw(draft.budgetJpy, exchangeRate)}</span>
-      <label>장소 추가 (Google)<div className="search-control"><Search size={15} /><input disabled placeholder="장소 검색 (기능은 v2에서 제공)" /></div></label>
-      <label>Google 장소 검색어<input value={draft.googlePlaceQuery} disabled={readonly} onChange={(event) => update({ googlePlaceQuery: event.target.value })} /></label>
+      <label className="detail-field">
+        <span className="detail-field-label">장소</span>
+        <input value={draft.place} disabled={readonly} onChange={(event) => update({ place: event.target.value })} />
+      </label>
+      <label className="detail-field">
+        <span className="detail-field-label">구분</span>
+        <select value={draft.category} disabled={readonly} onChange={(event) => update({ category: event.target.value as Category })}>
+          {categories.map((category) => <option key={category}>{category}</option>)}
+        </select>
+      </label>
+      <label className="detail-field">
+        <span className="detail-field-label">내용</span>
+        <input value={draft.title} disabled={readonly} onChange={(event) => update({ title: event.target.value })} />
+      </label>
+      <label className="detail-field">
+        <span className="detail-field-label">비고</span>
+        <input value={draft.note} disabled={readonly} onChange={(event) => update({ note: event.target.value })} />
+      </label>
+      <label className="detail-field detail-budget-field">
+        <span className="detail-field-label">예산 JPY</span>
+        <span className="detail-budget-inline">
+          <input type="number" min="0" value={draft.budgetJpy} disabled={readonly} onChange={(event) => update({ budgetJpy: Number(event.target.value) })} />
+          <span className="krw-preview">≈ {formatKrw(draft.budgetJpy, exchangeRate)}</span>
+        </span>
+      </label>
+      <label className="detail-field">
+        <span className="detail-field-label">장소 추가</span>
+        <div className="search-control"><Search size={15} /><input disabled placeholder="Google 장소 검색 (v2)" /></div>
+      </label>
+      <label className="detail-field">
+        <span className="detail-field-label">검색어</span>
+        <input value={draft.googlePlaceQuery} disabled={readonly} onChange={(event) => update({ googlePlaceQuery: event.target.value })} />
+      </label>
       <div className="detail-actions">
         <button className="ghost-button danger" disabled={readonly} onClick={() => onDelete(draft.id)}>
           <Trash2 size={16} />
@@ -1085,6 +1195,7 @@ function App() {
   const [activeDay, setActiveDay] = useState(getActiveTripDay(data.days).dayIndex)
   const [selectedItem, setSelectedItem] = useState<ItineraryItem | null>(null)
   const [showKrw, setShowKrw] = useState(false)
+  const mobileDetailHistoryRef = useRef(false)
 
   const activeTripDay = data.days.find((day) => day.dayIndex === activeDay) ?? data.days[0]
   const activeViewLabel = views.find((view) => view.id === activeView)?.label ?? data.trip.title
@@ -1110,13 +1221,43 @@ function App() {
     }
   }, [])
 
+  useEffect(() => {
+    const closeDetailFromHistory = () => {
+      if (!mobileDetailHistoryRef.current) return
+      mobileDetailHistoryRef.current = false
+      setSelectedItem(null)
+    }
+
+    window.addEventListener('popstate', closeDetailFromHistory)
+    return () => window.removeEventListener('popstate', closeDetailFromHistory)
+  }, [])
+
   if (!syncState.authenticated && !syncState.loading) {
     return <AuthScreen login={login} configured={syncState.configured} />
   }
 
+  const openScheduleDetail = (item: ItineraryItem | null) => {
+    if (!item) {
+      closeScheduleDetail()
+      return
+    }
+    setSelectedItem(item)
+    if (isMobileViewport() && !mobileDetailHistoryRef.current) {
+      window.history.pushState({ ...(window.history.state ?? {}), osakaScheduleDetail: true }, '', window.location.href)
+      mobileDetailHistoryRef.current = true
+    }
+  }
+
+  const closeScheduleDetail = () => {
+    setSelectedItem(null)
+    if (!mobileDetailHistoryRef.current) return
+    mobileDetailHistoryRef.current = false
+    window.history.back()
+  }
+
   const addItem = () => {
     const created = upsertItineraryItem({ dayIndex: activeTripDay.dayIndex, date: activeTripDay.date })
-    setSelectedItem(created)
+    openScheduleDetail(created)
   }
 
   const saveItem = (item: ItineraryItem) => {
@@ -1126,7 +1267,7 @@ function App() {
 
   const deleteItem = (id: string) => {
     deleteItineraryItem(id)
-    setSelectedItem(null)
+    closeScheduleDetail()
   }
 
   return (
@@ -1142,7 +1283,7 @@ function App() {
             activeDay={activeDay}
             setActiveDay={setActiveDay}
             selectedItem={selectedItem}
-            setSelectedItem={setSelectedItem}
+            setSelectedItem={openScheduleDetail}
             readonly={syncState.readonly}
             exchangeRate={data.trip.exchangeRate}
             showKrw={showKrw}
