@@ -339,8 +339,26 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
   color: var(--muted);
   border-left: 1px solid var(--line);
 }
-.split-add { display: inline-flex; }
-.schedule-add { min-width: 88px; }
+.floating-schedule-add {
+  position: fixed;
+  right: 28px;
+  bottom: 28px;
+  z-index: 18;
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 16px 34px rgba(37, 99, 235, 0.28);
+}
+.floating-schedule-add:hover:not(:disabled) { background: var(--accent-hover); }
+.floating-schedule-add:focus-visible {
+  outline: 3px solid var(--accent-line);
+  outline-offset: 3px;
+}
 .schedule-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 0; align-items: start; }
 .schedule-main { min-width: 0; }
 .day-tabs {
@@ -805,6 +823,18 @@ textarea { min-height: 56px; resize: vertical; }
 .drag-handle:hover:not(:disabled) { color: var(--accent); }
 .toggle-row { display: flex; align-items: center; justify-content: space-between; min-height: 44px; border-bottom: 1px solid var(--line); }
 .toggle-row input { width: auto; }
+.settings-budget-row {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
 .settings-line { color: var(--muted); }
 .muted-note { color: var(--muted); font-size: 13px; }
 .empty-state { min-height: 140px; display: grid; place-items: center; gap: 8px; color: var(--muted); }
@@ -851,6 +881,13 @@ textarea { min-height: 56px; resize: vertical; }
   .schedule-title { width: 100%; justify-content: space-between; }
   .schedule-title h1 { min-width: 0; }
   .schedule-actions { justify-content: flex-start; }
+  .floating-schedule-add {
+    right: max(18px, env(safe-area-inset-right));
+    bottom: calc(92px + env(safe-area-inset-bottom, 0px) + 16px);
+    width: 54px;
+    height: 54px;
+    z-index: 19;
+  }
   .account-cluster { margin-left: auto; }
   .login-pill { min-height: 34px; padding: 0 12px; }
   .avatar-button { width: 34px; height: 34px; }

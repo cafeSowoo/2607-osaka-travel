@@ -241,7 +241,6 @@ function ScheduleView({
   readonly,
   exchangeRate,
   showKrw,
-  setShowKrw,
   onAdd,
   onSave,
   onDelete,
@@ -258,7 +257,6 @@ function ScheduleView({
   readonly: boolean
   exchangeRate: number
   showKrw: boolean
-  setShowKrw: (value: boolean) => void
   onAdd: () => void
   onSave: (item: ItineraryItem) => void
   onDelete: (id: string) => void
@@ -368,21 +366,6 @@ function ScheduleView({
             <h1>{tripTitle}</h1>
             <AccountStatus syncState={syncState} onLogout={onLogout} />
           </div>
-          <div className="schedule-actions">
-            <div className="currency-switch" aria-label="예산 통화">
-              <button className="active currency-current" onClick={() => setShowKrw(!showKrw)}>
-                {showKrw ? 'KRW' : 'JPY'}
-              </button>
-              <button className="swap-button" aria-label="통화 전환" onClick={() => setShowKrw(!showKrw)}>
-                <RefreshCw size={13} />
-              </button>
-            </div>
-            <div className="split-add">
-              <button className="primary-button schedule-add" disabled={readonly} onClick={onAdd}>
-                일정 추가
-              </button>
-            </div>
-          </div>
         </header>
         {dayTabs('mobile-day-tabs')}
       </div>
@@ -412,22 +395,11 @@ function ScheduleView({
           <h1>{tripTitle}</h1>
           <AccountStatus syncState={syncState} onLogout={onLogout} />
         </div>
-        <div className="schedule-actions">
-          <div className="currency-switch" aria-label="예산 통화">
-            <button className="active currency-current" onClick={() => setShowKrw(!showKrw)}>
-              {showKrw ? 'KRW' : 'JPY'}
-            </button>
-            <button className="swap-button" aria-label="통화 전환" onClick={() => setShowKrw(!showKrw)}>
-              <RefreshCw size={13} />
-            </button>
-          </div>
-          <div className="split-add">
-            <button className="primary-button schedule-add" disabled={readonly} onClick={onAdd}>
-              일정 추가
-            </button>
-          </div>
-        </div>
       </header>
+
+      <button className="floating-schedule-add" type="button" disabled={readonly} onClick={onAdd} aria-label="일정 추가">
+        <Plus size={26} strokeWidth={2.5} />
+      </button>
 
       <div className="schedule-layout">
         <div className="schedule-main">
@@ -1193,10 +1165,17 @@ function SettingsView({
         <div className="panel-header">
           <h3>예산 표시</h3>
         </div>
-        <label className="toggle-row">
-          KRW로 보기
-          <input type="checkbox" checked={showKrw} onChange={(event) => setShowKrw(event.target.checked)} />
-        </label>
+        <div className="settings-budget-row">
+          <span>표시 통화</span>
+          <div className="currency-switch" aria-label="예산 통화">
+            <button className="active currency-current" onClick={() => setShowKrw(!showKrw)}>
+              {showKrw ? 'KRW' : 'JPY'}
+            </button>
+            <button className="swap-button" aria-label="통화 전환" onClick={() => setShowKrw(!showKrw)}>
+              <RefreshCw size={13} />
+            </button>
+          </div>
+        </div>
         <label>JPY → KRW 환율<input type="number" step="0.1" value={exchangeRate} onChange={(event) => onExchangeRate(Number(event.target.value))} /></label>
       </article>
       <article className="panel">
@@ -1437,7 +1416,6 @@ function App() {
             readonly={syncState.readonly}
             exchangeRate={data.trip.exchangeRate}
             showKrw={showKrw}
-            setShowKrw={setShowKrw}
             onAdd={addItem}
             onSave={saveItem}
             onDelete={deleteItem}
