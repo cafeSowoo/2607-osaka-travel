@@ -353,11 +353,18 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
   background: var(--accent);
   color: #fff;
   box-shadow: 0 16px 34px rgba(37, 99, 235, 0.28);
+  transition: opacity 160ms ease, transform 160ms ease, visibility 160ms ease;
 }
 .floating-schedule-add:hover:not(:disabled) { background: var(--accent-hover); }
 .floating-schedule-add:focus-visible {
   outline: 3px solid var(--accent-line);
   outline-offset: 3px;
+}
+.floating-schedule-add.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: scale(0.88);
 }
 .schedule-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 0; align-items: start; }
 .schedule-main { min-width: 0; }

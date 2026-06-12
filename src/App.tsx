@@ -401,7 +401,7 @@ function ScheduleView({
         </div>
       </header>
 
-      <button className="floating-schedule-add" type="button" disabled={readonly} onClick={onAdd} aria-label="일정 추가">
+      <button className={`floating-schedule-add ${selectedItem ? 'is-hidden' : ''}`} type="button" disabled={readonly} onClick={onAdd} aria-label="일정 추가">
         <Plus size={26} strokeWidth={2.5} />
       </button>
 
