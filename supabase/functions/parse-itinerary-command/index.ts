@@ -224,7 +224,9 @@ const compactRouteSummary = (routeJson: Record<string, unknown>, intent: RouteIn
       distance: getText(stepLocalized?.distance),
       duration: getText(stepLocalized?.staticDuration),
       transit: {
-        line: normalizeString(transitLine.name) || normalizeString(transitLine.nameShort),
+        line: normalizeString(transitLine.nameShort) || normalizeString(transitLine.name),
+        lineName: normalizeString(transitLine.name),
+        lineShort: normalizeString(transitLine.nameShort),
         vehicle: normalizeString(vehicle.name) || normalizeString(vehicle.type),
         headsign: normalizeString(transitDetails.headsign),
         tripShortText: normalizeString(transitDetails.tripShortText),
@@ -416,6 +418,7 @@ Deno.serve(async (req) => {
     'Use HH:MM for startTime and endTime. If only one time appears, keep the current endTime unless duration is obvious.',
     'Use JPY for budgetJpy. Convert Korean text like 5천엔 or 5000엔 to 5000.',
     'Make title concise. Put details such as transit line number, stop names, transfer notes, or reminders into note.',
+    'For transit steps, include transit.line or transit.lineShort exactly when present. For example, write "6777-1번 버스" rather than only "공항버스".',
     'If routeSummary.found is true, trust routeSummary over guesses. Use computedStartTime/computedEndTime when available.',
     'If routeSummary.found is false, do not invent line numbers or departure times. Put that Google Routes did not return a public-transit route in note.',
   ].join('\n')
