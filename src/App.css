@@ -214,6 +214,7 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .timeline-item span { color: var(--muted); margin-top: 4px; }
 
 .schedule-screen { display: grid; gap: 16px; }
+.mobile-schedule-sticky { display: none; }
 .schedule-header {
   display: flex;
   align-items: flex-start;
@@ -659,6 +660,24 @@ textarea { min-height: 56px; resize: vertical; }
   .topbar { display: grid; }
   .topbar-actions { justify-content: flex-start; }
   .today-grid, .view-grid, .schedule-layout, .checklist-board, .settings-grid { grid-template-columns: 1fr; }
+  .schedule-screen {
+    gap: 0;
+  }
+  .mobile-schedule-sticky {
+    position: sticky;
+    top: -18px;
+    z-index: 15;
+    display: grid;
+    gap: 16px;
+    margin: -18px -14px 28px;
+    padding: 18px 14px 0;
+    background: var(--bg);
+    border-bottom: 1px solid rgba(209, 216, 226, 0.86);
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+  }
+  .schedule-screen > .schedule-header {
+    display: none;
+  }
   .schedule-header { display: grid; grid-template-columns: minmax(0, 1fr); align-items: stretch; justify-items: stretch; gap: 14px; }
   .schedule-header > * { justify-self: stretch; }
   .schedule-title { width: 100%; justify-content: space-between; }
@@ -669,14 +688,19 @@ textarea { min-height: 56px; resize: vertical; }
   .avatar-button { width: 34px; height: 34px; }
   .logout-chip { min-height: 34px; padding: 0 11px; }
   .day-tabs { grid-template-columns: repeat(5, minmax(82px, 1fr)); }
+  .desktop-day-tabs { display: none; }
+  .mobile-day-tabs {
+    margin: 0 -14px;
+    padding: 0 14px;
+  }
   .wide { grid-column: auto; }
   .itinerary-table { border: 0; background: transparent; display: grid; gap: 10px; }
   .table-row.head { display: none; }
   .table-row {
-    grid-template-columns: 58px minmax(0, 250px);
-    justify-content: space-between;
+    grid-template-columns: 46px minmax(0, 1fr);
+    justify-content: stretch;
     align-items: stretch;
-    gap: 12px;
+    gap: 10px;
     min-height: auto;
     padding: 0;
     border: 0;
@@ -712,18 +736,18 @@ textarea { min-height: 56px; resize: vertical; }
     align-items: flex-end;
     justify-content: center;
     gap: 2px;
-    color: #6b7280;
+    color: #374151;
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 850;
     line-height: 1.1;
   }
   .time-divider {
-    padding-right: 12px;
-    color: #6b7280;
-    font-weight: 800;
+    padding-right: 8px;
+    color: #4b5563;
+    font-weight: 900;
   }
   .table-row > .mobile-card-content {
-    width: min(250px, 100%);
+    width: 100%;
     min-height: 78px;
     justify-self: end;
     display: grid;

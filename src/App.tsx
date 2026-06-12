@@ -310,8 +310,44 @@ function ScheduleView({
     }
   }
 
+  const dayTabs = (className = '') => (
+    <div className={`day-tabs ${className}`}>
+      {days.map((candidate) => (
+        <button key={candidate.dayIndex} className={candidate.dayIndex === activeDay ? 'active' : ''} onClick={() => setActiveDay(candidate.dayIndex)}>
+          <span>{`Day${candidate.dayIndex}`}</span>
+          <small>{formatTabDate(candidate)}</small>
+        </button>
+      ))}
+    </div>
+  )
+
   return (
     <section className="schedule-screen">
+      <div className="mobile-schedule-sticky">
+        <header className="schedule-header">
+          <div className="schedule-title">
+            <h1>{tripTitle}</h1>
+            <AccountStatus syncState={syncState} onLogout={onLogout} />
+          </div>
+          <div className="schedule-actions">
+            <div className="currency-switch" aria-label="예산 통화">
+              <button className="active currency-current" onClick={() => setShowKrw(!showKrw)}>
+                {showKrw ? 'KRW' : 'JPY'}
+              </button>
+              <button className="swap-button" aria-label="통화 전환" onClick={() => setShowKrw(!showKrw)}>
+                <RefreshCw size={13} />
+              </button>
+            </div>
+            <div className="split-add">
+              <button className="primary-button schedule-add" disabled={readonly} onClick={onAdd}>
+                일정 추가
+              </button>
+            </div>
+          </div>
+        </header>
+        {dayTabs('mobile-day-tabs')}
+      </div>
+
       <header className="schedule-header">
         <div className="schedule-title">
           <h1>{tripTitle}</h1>
@@ -336,14 +372,7 @@ function ScheduleView({
 
       <div className="schedule-layout">
         <div className="schedule-main">
-          <div className="day-tabs">
-            {days.map((candidate) => (
-              <button key={candidate.dayIndex} className={candidate.dayIndex === activeDay ? 'active' : ''} onClick={() => setActiveDay(candidate.dayIndex)}>
-                <span>{`Day${candidate.dayIndex}`}</span>
-                <small>{formatTabDate(candidate)}</small>
-              </button>
-            ))}
-          </div>
+          {dayTabs('desktop-day-tabs')}
           <div className="itinerary-table" style={tableStyle}>
             <div className="table-row head">
               {scheduleColumns.map((column) => (
