@@ -382,6 +382,7 @@ function ScheduleView({
           <DetailPanel
             key={`mobile-${selectedItem.id}`}
             item={selectedItem}
+            dayItems={dayItems}
             readonly={readonly}
             exchangeRate={exchangeRate}
             onClose={() => setSelectedItem(null)}
@@ -447,7 +448,7 @@ function ScheduleView({
             </div>
           </div>
         </div>
-        <DetailPanel key={selectedItem?.id ?? 'empty'} item={selectedItem} readonly={readonly} exchangeRate={exchangeRate} onClose={() => setSelectedItem(null)} onSave={onSave} onDelete={onDelete} variant="desktop" />
+        <DetailPanel key={selectedItem?.id ?? 'empty'} item={selectedItem} dayItems={dayItems} readonly={readonly} exchangeRate={exchangeRate} onClose={() => setSelectedItem(null)} onSave={onSave} onDelete={onDelete} variant="desktop" />
       </div>
     </section>
   )
@@ -459,6 +460,7 @@ function isDetailPanelDragBlocked(target: EventTarget | null) {
 
 function DetailPanel({
   item,
+  dayItems,
   readonly,
   exchangeRate,
   onClose,
@@ -467,6 +469,7 @@ function DetailPanel({
   variant = 'desktop',
 }: {
   item: ItineraryItem | null
+  dayItems: ItineraryItem[]
   readonly: boolean
   exchangeRate: number
   onClose: () => void
@@ -555,7 +558,7 @@ function DetailPanel({
     setAiLoading(true)
     setAiError('')
     try {
-      const patch = await fillItineraryWithAi(cleanCommand, draft)
+      const patch = await fillItineraryWithAi(cleanCommand, draft, dayItems)
       update(patch)
     } catch (error) {
       setAiError(error instanceof Error ? error.message : 'AI로 내용을 채우지 못했습니다.')

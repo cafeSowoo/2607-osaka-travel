@@ -264,7 +264,7 @@ export const deleteChecklistItem = async (id: string) => {
   if (error) throw error
 }
 
-export const fillItineraryWithAi = async (command: string, currentItem: ItineraryItem): Promise<ItineraryAiPatch> => {
+export const fillItineraryWithAi = async (command: string, currentItem: ItineraryItem, dayItems: ItineraryItem[] = []): Promise<ItineraryAiPatch> => {
   if (!supabase) throw new Error('AI 기능은 Supabase 연결 후 사용할 수 있습니다.')
 
   const { data, error } = await supabase.functions.invoke('parse-itinerary-command', {
@@ -282,6 +282,17 @@ export const fillItineraryWithAi = async (command: string, currentItem: Itinerar
         budgetJpy: currentItem.budgetJpy,
         googlePlaceQuery: currentItem.googlePlaceQuery,
       },
+      dayContext: dayItems
+        .filter((item) => item.date === currentItem.date || item.dayIndex === currentItem.dayIndex)
+        .map((item) => ({
+          startTime: item.startTime,
+          endTime: item.endTime,
+          place: item.place,
+          category: item.category,
+          title: item.title,
+          note: item.note,
+          googlePlaceQuery: item.googlePlaceQuery,
+        })),
       categories,
       trip: {
         title: seedTrip.title,
