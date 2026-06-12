@@ -142,13 +142,20 @@ const callGeminiJson = async (
   }
 }
 
-const makeJapanAddress = (value: string) => {
-  const text = value.trim()
-  if (!text) return text
-  return /japan|日本|일본|osaka|오사카|kobe|고베|kansai|간사이/i.test(text) ? text : `${text}, Osaka, Japan`
+const inferRegionCode = (...values: string[]) => {
+  const text = values.join(' ')
+  if (/korea|south korea|대한민국|한국|인천|서울|김포|캠퍼스타운|송도|공항철도/i.test(text)) return 'KR'
+  return 'JP'
 }
 
-const makeRfc3339InJapan = (date: string, time: string) => `${date}T${time}:00+09:00`
+const makeRouteAddress = (value: string, regionCode: string) => {
+  const text = value.trim()
+  if (!text) return text
+  if (/japan|日本|일본|korea|대한민국|한국|south korea/i.test(text)) return text
+  return regionCode === 'KR' ? `${text}, South Korea` : `${text}, Japan`
+}
+
+const makeRfc3339AtUtc9 = (date: string, time: string) => `${date}T${time}:00+09:00`
 
 const getText = (value: unknown) => {
   if (!value || typeof value !== 'object') return ''
@@ -257,18 +264,19 @@ const compactRouteSummary = (routeJson: Record<string, unknown>, intent: RouteIn
 }
 
 const callRoutesApi = async (mapsKey: string, intent: RouteIntent) => {
+  const regionCode = inferRegionCode(intent.origin, intent.destination)
   const body: Record<string, unknown> = {
-    origin: { address: makeJapanAddress(intent.origin) },
-    destination: { address: makeJapanAddress(intent.destination) },
+    origin: { address: makeRouteAddress(intent.origin, regionCode) },
+    destination: { address: makeRouteAddress(intent.destination, regionCode) },
     travelMode: 'TRANSIT',
     computeAlternativeRoutes: false,
     languageCode: 'ko',
-    regionCode: 'JP',
+    regionCode,
     units: 'METRIC',
   }
 
-  if (intent.timeType === 'arrival') body.arrivalTime = makeRfc3339InJapan(intent.date, intent.time)
-  if (intent.timeType === 'departure') body.departureTime = makeRfc3339InJapan(intent.date, intent.time)
+  if (intent.timeType === 'arrival') body.arrivalTime = makeRfc3339AtUtc9(intent.date, intent.time)
+  if (intent.timeType === 'departure') body.departureTime = makeRfc3339AtUtc9(intent.date, intent.time)
 
   const transitPreferences: Record<string, unknown> = {}
   if (intent.transitModes.length) transitPreferences.allowedTravelModes = intent.transitModes
