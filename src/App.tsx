@@ -1,7 +1,6 @@
 import {
   CalendarDays,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
   Circle,
   ClipboardCheck,
@@ -107,9 +106,20 @@ const getActiveTripDay = (days: TripDay[]) => {
 }
 
 const makeTimeRange = (item: ItineraryItem) => `${item.startTime || '--:--'} ~ ${item.endTime || '--:--'}`
+const formatPlace = (place: string) => place.replace(/\s*->\s*/g, ' → ')
 const formatTabDate = (day: TripDay) => {
   const [, month, date] = day.date.split('-')
   return `${month}.${date} (${day.label.split(' ').at(-1) ?? ''})`
+}
+
+const categoryToneClasses: Record<Category, string> = {
+  이동: 'tone-travel',
+  식사: 'tone-meal',
+  카페: 'tone-cafe',
+  관광: 'tone-sight',
+  쇼핑: 'tone-shopping',
+  휴식: 'tone-rest',
+  기타: 'tone-etc',
 }
 
 function AuthScreen({ login, configured }: { login: () => void; configured: boolean }) {
@@ -305,6 +315,7 @@ function ScheduleView({
       <header className="schedule-header">
         <div className="schedule-title">
           <h1>{tripTitle}</h1>
+          <AccountStatus syncState={syncState} onLogout={onLogout} />
         </div>
         <div className="schedule-actions">
           <div className="currency-switch" aria-label="예산 통화">
@@ -319,11 +330,7 @@ function ScheduleView({
             <button className="primary-button schedule-add" disabled={readonly} onClick={onAdd}>
               일정 추가
             </button>
-            <button className="primary-button add-menu" disabled={readonly} aria-label="일정 추가 옵션">
-              <ChevronDown size={17} />
-            </button>
           </div>
-          <AccountStatus syncState={syncState} onLogout={onLogout} />
         </div>
       </header>
 
@@ -353,13 +360,23 @@ function ScheduleView({
               ))}
             </div>
             {dayItems.length ? dayItems.map((item) => (
-              <button key={item.id} className={`table-row ${selectedItem?.id === item.id ? 'selected' : ''}`} onClick={() => setSelectedItem(item)}>
-                <span>{makeTimeRange(item)}</span>
-                <span>{item.place || '장소 미정'}</span>
-                <span><CategoryBadge category={item.category} /></span>
-                <span>{item.title}</span>
-                <span>{item.note || '-'}</span>
-                <span>{formatBudget(item.budgetJpy, showKrw, exchangeRate)}</span>
+              <button key={item.id} className={`table-row ${categoryToneClasses[item.category]} ${selectedItem?.id === item.id ? 'selected' : ''}`} onClick={() => setSelectedItem(item)}>
+                <span className="mobile-time-stack">
+                  <span>{item.startTime || '--:--'}</span>
+                  <span className="time-divider">~</span>
+                  <span>{item.endTime || '--:--'}</span>
+                </span>
+                <span className="mobile-card-content">
+                  <CategoryBadge category={item.category} />
+                  <span className="mobile-card-place">{formatPlace(item.place || '장소 미정')}</span>
+                  <span className="mobile-card-title">{item.title}</span>
+                </span>
+                <span className="schedule-time">{makeTimeRange(item)}</span>
+                <span className="schedule-place">{formatPlace(item.place || '장소 미정')}</span>
+                <span className="schedule-category"><CategoryBadge category={item.category} /></span>
+                <span className="schedule-title-cell">{item.title}</span>
+                <span className="schedule-note">{item.note || '-'}</span>
+                <span className="schedule-budget">{formatBudget(item.budgetJpy, showKrw, exchangeRate)}</span>
               </button>
             )) : <EmptyState text="이 날짜의 일정표가 비어 있습니다." />}
             <div className="table-total-row">

@@ -222,7 +222,7 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
   min-height: 58px;
   padding: 2px 0 0;
 }
-.schedule-title { display: flex; align-items: center; gap: 7px; }
+.schedule-title { display: flex; align-items: center; gap: 12px; }
 .schedule-title h1 {
   margin: 0;
   font-size: 28px;
@@ -258,13 +258,6 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
   border-left: 1px solid var(--line);
 }
 .split-add { display: inline-flex; }
-.split-add .primary-button { border-radius: 7px 0 0 7px; }
-.split-add .add-menu {
-  width: 42px;
-  padding: 0;
-  border-left-color: rgba(255, 255, 255, 0.24);
-  border-radius: 0 7px 7px 0;
-}
 .schedule-add { min-width: 88px; }
 .schedule-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 0; align-items: start; }
 .schedule-main { min-width: 0; }
@@ -368,6 +361,8 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
   outline: 1px solid var(--accent-line);
   outline-offset: -1px;
 }
+.table-row > .mobile-time-stack,
+.table-row > .mobile-card-content { display: none; }
 .table-row:last-child { border-bottom: 0; }
 .table-total-row {
   min-height: 48px;
@@ -664,7 +659,10 @@ textarea { min-height: 56px; resize: vertical; }
   .topbar { display: grid; }
   .topbar-actions { justify-content: flex-start; }
   .today-grid, .view-grid, .schedule-layout, .checklist-board, .settings-grid { grid-template-columns: 1fr; }
-  .schedule-header { display: grid; gap: 14px; }
+  .schedule-header { display: grid; grid-template-columns: minmax(0, 1fr); align-items: stretch; justify-items: stretch; gap: 14px; }
+  .schedule-header > * { justify-self: stretch; }
+  .schedule-title { width: 100%; justify-content: space-between; }
+  .schedule-title h1 { min-width: 0; }
   .schedule-actions { justify-content: flex-start; }
   .account-cluster { margin-left: auto; }
   .login-pill { min-height: 34px; padding: 0 12px; }
@@ -675,35 +673,111 @@ textarea { min-height: 56px; resize: vertical; }
   .itinerary-table { border: 0; background: transparent; display: grid; gap: 10px; }
   .table-row.head { display: none; }
   .table-row {
-    grid-template-columns: 1fr;
-    gap: 6px;
+    grid-template-columns: 58px minmax(0, 250px);
+    justify-content: space-between;
+    align-items: stretch;
+    gap: 12px;
     min-height: auto;
-    padding: 13px;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    box-shadow: 0 10px 28px rgba(43, 39, 33, 0.05);
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    font-size: 12px;
   }
   .column-resizer { display: none; }
   .table-row > span { min-height: auto; padding: 0; border-right: 0; justify-content: flex-start; }
   .table-row > span:last-child { justify-content: flex-start; }
+  .table-row.selected {
+    background: transparent;
+    outline: 0;
+  }
+  .table-row:not(.head):hover { background: transparent; }
+  .table-row.tone-travel { --mobile-card-bg: #f6fbff; border-color: #d8e9fb; }
+  .table-row.tone-meal { --mobile-card-bg: #fffaf6; border-color: #f4dfcf; }
+  .table-row.tone-cafe { --mobile-card-bg: #fffdf6; border-color: #f1e3bd; }
+  .table-row.tone-sight { --mobile-card-bg: #f7fff9; border-color: #d7efd9; }
+  .table-row.tone-shopping { --mobile-card-bg: #fcf9ff; border-color: #e4d8f8; }
+  .table-row.tone-rest { --mobile-card-bg: #fbfcfe; border-color: #dde3eb; }
+  .table-row.tone-etc { --mobile-card-bg: #fbfcfe; border-color: #dde3eb; }
+  .table-row > .schedule-time,
+  .table-row > .schedule-place,
+  .table-row > .schedule-category,
+  .table-row > .schedule-title-cell,
+  .table-row > .schedule-note,
+  .table-row > .schedule-budget { display: none; }
+  .table-row > .mobile-time-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 2px;
+    color: #6b7280;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+  .time-divider {
+    padding-right: 12px;
+    color: #6b7280;
+    font-weight: 800;
+  }
+  .table-row > .mobile-card-content {
+    width: min(250px, 100%);
+    min-height: 78px;
+    justify-self: end;
+    display: grid;
+    align-content: start;
+    gap: 4px;
+    padding: 10px 11px 11px;
+    border: 1px solid currentColor;
+    border-radius: 7px;
+    background: var(--mobile-card-bg, var(--surface));
+    color: var(--mobile-card-border, var(--line));
+  }
+  .table-row.tone-travel .mobile-card-content { --mobile-card-border: #d8e9fb; }
+  .table-row.tone-meal .mobile-card-content { --mobile-card-border: #f4dfcf; }
+  .table-row.tone-cafe .mobile-card-content { --mobile-card-border: #f1e3bd; }
+  .table-row.tone-sight .mobile-card-content { --mobile-card-border: #d7efd9; }
+  .table-row.tone-shopping .mobile-card-content { --mobile-card-border: #e4d8f8; }
+  .table-row.tone-rest .mobile-card-content,
+  .table-row.tone-etc .mobile-card-content { --mobile-card-border: #dde3eb; }
+  .mobile-card-place {
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 760;
+    line-height: 1.45;
+  }
+  .mobile-card-title {
+    color: #4b5563;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .category-badge {
+    justify-self: start;
+    min-width: auto;
+    height: 20px;
+    padding: 0 7px;
+    font-size: 11px;
+  }
   .table-total-row { border: 1px solid var(--line); border-radius: 8px; }
   .detail-panel { position: static; margin-top: 0; }
   .mobile-tabs {
     position: fixed;
-    left: 12px;
-    right: 12px;
-    bottom: 12px;
+    left: 0;
+    right: 0;
+    bottom: 0;
     z-index: 20;
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 2px;
-    padding: 6px;
-    border: 1px solid var(--line);
-    border-radius: 14px;
+    gap: 0;
+    padding: 8px max(10px, env(safe-area-inset-left)) max(8px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-right));
+    border-top: 1px solid var(--line);
+    border-radius: 0;
     background: rgba(255, 255, 255, 0.92);
     backdrop-filter: blur(18px);
-    box-shadow: var(--shadow);
+    box-shadow: 0 -8px 24px rgba(43, 39, 33, 0.08);
   }
-  .mobile-tabs button { min-height: 52px; display: grid; place-items: center; border-radius: 10px; font-size: 11px; }
+  .mobile-tabs button { min-height: 52px; display: grid; place-items: center; border-radius: 8px; font-size: 11px; }
   .mobile-tabs button.active { background: #f0efeb; color: var(--text); }
 }
