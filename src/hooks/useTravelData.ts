@@ -31,6 +31,7 @@ export const useTravelData = () => {
   const [demoMode, setDemoMode] = useState(!isSupabaseConfigured)
   const [online, setOnline] = useState(navigator.onLine)
   const [message, setMessage] = useState('로컬 데이터를 준비했어요.')
+  const [lastRemoteMutationAt, setLastRemoteMutationAt] = useState(0)
 
   const readonly = !online
   const userMetadata = session?.user.user_metadata as Record<string, string | undefined> | undefined
@@ -43,13 +44,14 @@ export const useTravelData = () => {
       offline: !online,
       readonly,
       message,
+      lastRemoteMutationAt,
       user: session ? {
         name: userMetadata?.full_name ?? userMetadata?.name ?? session.user.email ?? '사용자',
         email: session.user.email ?? '',
         avatarUrl: userMetadata?.avatar_url ?? userMetadata?.picture ?? '',
       } : null,
     }),
-    [demoMode, loading, message, online, readonly, session, userMetadata],
+    [demoMode, lastRemoteMutationAt, loading, message, online, readonly, session, userMetadata],
   )
 
   const refresh = useCallback(async () => {
@@ -111,6 +113,7 @@ export const useTravelData = () => {
         try {
           await remoteAction()
           setMessage('변경사항 저장됨')
+          setLastRemoteMutationAt(Date.now())
         } catch (error) {
           setMessage(error instanceof Error ? error.message : '원격 저장 실패')
         }

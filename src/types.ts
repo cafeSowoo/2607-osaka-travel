@@ -73,6 +73,7 @@ export type SyncState = {
   offline: boolean
   readonly: boolean
   message: string
+  lastRemoteMutationAt: number
   user: {
     name: string
     email: string

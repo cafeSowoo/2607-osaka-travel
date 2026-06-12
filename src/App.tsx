@@ -57,6 +57,7 @@ const formatBudget = (value: number, showKrw: boolean, rate: number) => showKrw 
 const normalizeTime = (value: string) => value.trim().slice(0, 5)
 const isMobileViewport = () => window.matchMedia('(max-width: 980px)').matches
 const SCHEDULE_COLUMN_STORAGE_KEY = 'osaka-travel-pwa:schedule-column-widths:v1'
+const DRAFT_ITINERARY_ID_PREFIX = 'draft-itinerary-'
 
 const scheduleColumns = [
   { id: 'time', label: '시간', defaultWidth: 118, minWidth: 96, maxWidth: 180 },
@@ -114,6 +115,7 @@ const formatTabDate = (day: TripDay) => {
   const [, month, date] = day.date.split('-')
   return `${month}.${date} (${day.label.split(' ').at(-1) ?? ''})`
 }
+const isDraftItineraryItem = (item: ItineraryItem) => item.id.startsWith(DRAFT_ITINERARY_ID_PREFIX)
 
 const categoryToneClasses: Record<Category, string> = {
   이동: 'tone-travel',
@@ -265,6 +267,8 @@ function ScheduleView({
 }) {
   const dayItems = items.filter((item) => item.dayIndex === activeDay)
   const dayBudget = dayItems.reduce((sum, item) => sum + item.budgetJpy, 0)
+  const mobileStickyRef = useRef<HTMLDivElement>(null)
+  const [mobileDetailTop, setMobileDetailTop] = useState<number | null>(null)
   const [columnWidths, setColumnWidths] = useState<ScheduleColumnWidths>(readScheduleColumnWidths)
   const scheduleGridTemplate = useMemo(() => makeScheduleGridTemplate(columnWidths), [columnWidths])
   const tableStyle = { '--schedule-columns': scheduleGridTemplate } as CSSProperties
@@ -324,9 +328,41 @@ function ScheduleView({
     </div>
   )
 
+  useLayoutEffect(() => {
+    const sticky = mobileStickyRef.current
+    if (!sticky || !selectedItem) {
+      setMobileDetailTop(null)
+      return
+    }
+
+    const syncMobileDetailTop = () => {
+      setMobileDetailTop(sticky.getBoundingClientRect().bottom)
+    }
+
+    syncMobileDetailTop()
+    const resizeObserver = new ResizeObserver(syncMobileDetailTop)
+    resizeObserver.observe(sticky)
+    window.addEventListener('resize', syncMobileDetailTop)
+
+    const scrollRoot = sticky.closest('.workspace')
+    scrollRoot?.addEventListener('scroll', syncMobileDetailTop, { passive: true })
+
+    return () => {
+      resizeObserver.disconnect()
+      window.removeEventListener('resize', syncMobileDetailTop)
+      scrollRoot?.removeEventListener('scroll', syncMobileDetailTop)
+    }
+  }, [selectedItem])
+
+  const mobileDetailOverlayStyle = mobileDetailTop === null
+    ? undefined
+    : ({
+        '--mobile-detail-top': `${mobileDetailTop}px`,
+      } as CSSProperties)
+
   return (
     <section className="schedule-screen">
-      <div className="mobile-schedule-sticky">
+      <div className="mobile-schedule-sticky" ref={mobileStickyRef}>
         <header className="schedule-header">
           <div className="schedule-title">
             <h1>{tripTitle}</h1>
@@ -350,6 +386,26 @@ function ScheduleView({
         </header>
         {dayTabs('mobile-day-tabs')}
       </div>
+
+      {selectedItem && (
+        <div
+          className="mobile-detail-overlay"
+          role="presentation"
+          style={mobileDetailOverlayStyle}
+          onClick={() => setSelectedItem(null)}
+        >
+          <DetailPanel
+            key={`mobile-${selectedItem.id}`}
+            item={selectedItem}
+            readonly={readonly}
+            exchangeRate={exchangeRate}
+            onClose={() => setSelectedItem(null)}
+            onSave={onSave}
+            onDelete={onDelete}
+            variant="mobile"
+          />
+        </div>
+      )}
 
       <header className="schedule-header">
         <div className="schedule-title">
@@ -376,18 +432,6 @@ function ScheduleView({
       <div className="schedule-layout">
         <div className="schedule-main">
           {dayTabs('desktop-day-tabs')}
-          {selectedItem && (
-            <DetailPanel
-              key={`mobile-${selectedItem.id}`}
-              item={selectedItem}
-              readonly={readonly}
-              exchangeRate={exchangeRate}
-              onClose={() => setSelectedItem(null)}
-              onSave={onSave}
-              onDelete={onDelete}
-              variant="mobile"
-            />
-          )}
           <div className="itinerary-table" style={tableStyle}>
             <div className="table-row head">
               {scheduleColumns.map((column) => (
@@ -435,6 +479,10 @@ function ScheduleView({
   )
 }
 
+function isDetailPanelDragBlocked(target: EventTarget | null) {
+  return target instanceof Element && Boolean(target.closest('.detail-actions, button, input, select, textarea, label, .search-control, .category-badge-strip'))
+}
+
 function DetailPanel({
   item,
   readonly,
@@ -465,7 +513,7 @@ function DetailPanel({
   }
 
   const startDetailDrag = (event: ReactTouchEvent<HTMLElement>) => {
-    if (!mobilePanel) return
+    if (!mobilePanel || isDetailPanelDragBlocked(event.target)) return
     dragStartY.current = event.touches[0]?.clientY ?? null
     updateDragOffset(0)
   }
@@ -488,7 +536,7 @@ function DetailPanel({
   }
 
   const startPointerDrag = (event: ReactPointerEvent<HTMLElement>) => {
-    if (!mobilePanel) return
+    if (!mobilePanel || isDetailPanelDragBlocked(event.target)) return
     if (event.pointerType === 'mouse' && event.button !== 0) return
     pointerStartY.current = event.clientY
     updateDragOffset(0)
@@ -526,6 +574,9 @@ function DetailPanel({
     <aside
       className={panelClassName}
       style={panelStyle}
+      onClick={(event) => {
+        if (mobilePanel) event.stopPropagation()
+      }}
       onTouchStart={startDetailDrag}
       onTouchMove={moveDetailDrag}
       onTouchEnd={endDetailDrag}
@@ -555,12 +606,23 @@ function DetailPanel({
         <span className="detail-field-label">장소</span>
         <input value={draft.place} disabled={readonly} onChange={(event) => update({ place: event.target.value })} />
       </label>
-      <label className="detail-field">
+      <div className="detail-field detail-category-field">
         <span className="detail-field-label">구분</span>
-        <select value={draft.category} disabled={readonly} onChange={(event) => update({ category: event.target.value as Category })}>
-          {categories.map((category) => <option key={category}>{category}</option>)}
-        </select>
-      </label>
+        <div className="category-badge-strip" role="radiogroup" aria-label="구분">
+          {categories.map((category) => (
+            <button
+              key={category}
+              type="button"
+              className={`category-badge-button ${draft.category === category ? 'selected' : ''}`}
+              aria-pressed={draft.category === category}
+              disabled={readonly}
+              onClick={() => update({ category })}
+            >
+              <CategoryBadge category={category} />
+            </button>
+          ))}
+        </div>
+      </div>
       <label className="detail-field">
         <span className="detail-field-label">내용</span>
         <input value={draft.title} disabled={readonly} onChange={(event) => update({ title: event.target.value })} />
@@ -1195,7 +1257,11 @@ function App() {
   const [activeDay, setActiveDay] = useState(getActiveTripDay(data.days).dayIndex)
   const [selectedItem, setSelectedItem] = useState<ItineraryItem | null>(null)
   const [showKrw, setShowKrw] = useState(false)
+  const [saveToastVisible, setSaveToastVisible] = useState(false)
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const mobileDetailHistoryRef = useRef(false)
+  const pendingSaveToastRef = useRef(false)
+  const saveToastTimerRef = useRef<number | null>(null)
 
   const activeTripDay = data.days.find((day) => day.dayIndex === activeDay) ?? data.days[0]
   const activeViewLabel = views.find((view) => view.id === activeView)?.label ?? data.trip.title
@@ -1232,6 +1298,21 @@ function App() {
     return () => window.removeEventListener('popstate', closeDetailFromHistory)
   }, [])
 
+  useEffect(() => {
+    if (!syncState.lastRemoteMutationAt || !pendingSaveToastRef.current) return
+    pendingSaveToastRef.current = false
+    setSaveToastVisible(true)
+    if (saveToastTimerRef.current !== null) window.clearTimeout(saveToastTimerRef.current)
+    saveToastTimerRef.current = window.setTimeout(() => {
+      setSaveToastVisible(false)
+      saveToastTimerRef.current = null
+    }, 1600)
+  }, [syncState.lastRemoteMutationAt])
+
+  useEffect(() => () => {
+    if (saveToastTimerRef.current !== null) window.clearTimeout(saveToastTimerRef.current)
+  }, [])
+
   if (!syncState.authenticated && !syncState.loading) {
     return <AuthScreen login={login} configured={syncState.configured} />
   }
@@ -1256,22 +1337,91 @@ function App() {
   }
 
   const addItem = () => {
-    const created = upsertItineraryItem({ dayIndex: activeTripDay.dayIndex, date: activeTripDay.date })
-    openScheduleDetail(created)
+    const dayItems = data.itineraryItems.filter((item) => item.dayIndex === activeTripDay.dayIndex)
+    openScheduleDetail({
+      id: `${DRAFT_ITINERARY_ID_PREFIX}${crypto.randomUUID()}`,
+      tripId: data.trip.id,
+      dayIndex: activeTripDay.dayIndex,
+      date: activeTripDay.date,
+      startTime: '09:00',
+      endTime: '10:00',
+      place: '',
+      category: '기타',
+      title: '새 일정',
+      note: '',
+      budgetJpy: 0,
+      googlePlaceQuery: '',
+      sortOrder: dayItems.length * 10 + 10,
+    })
   }
 
   const saveItem = (item: ItineraryItem) => {
-    const saved = upsertItineraryItem(item)
+    pendingSaveToastRef.current = true
+    const saved = isDraftItineraryItem(item)
+      ? upsertItineraryItem({
+          tripId: item.tripId,
+          dayIndex: item.dayIndex,
+          date: item.date,
+          startTime: item.startTime,
+          endTime: item.endTime,
+          place: item.place,
+          category: item.category,
+          title: item.title,
+          note: item.note,
+          budgetJpy: item.budgetJpy,
+          googlePlaceQuery: item.googlePlaceQuery,
+          sortOrder: item.sortOrder,
+        })
+      : upsertItineraryItem(item)
     setSelectedItem(saved)
   }
 
   const deleteItem = (id: string) => {
-    deleteItineraryItem(id)
+    pendingSaveToastRef.current = false
+    setPendingDeleteId(id)
+  }
+
+  const cancelDeleteItem = () => {
+    setPendingDeleteId(null)
+  }
+
+  const confirmDeleteItem = () => {
+    if (!pendingDeleteId) return
+    const deleteId = pendingDeleteId
+    setPendingDeleteId(null)
+    pendingSaveToastRef.current = false
+    if (deleteId.startsWith(DRAFT_ITINERARY_ID_PREFIX)) {
+      closeScheduleDetail()
+      return
+    }
+    deleteItineraryItem(deleteId)
     closeScheduleDetail()
   }
 
   return (
     <div className="app-shell">
+      {saveToastVisible && (
+        <div className="save-toast" role="status" aria-live="polite">
+          저장되었습니다
+        </div>
+      )}
+      {pendingDeleteId && (
+        <div className="confirm-overlay" role="presentation" onClick={cancelDeleteItem}>
+          <section
+            className="confirm-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-confirm-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="delete-confirm-title">삭제하시겠습니까?</h2>
+            <div className="confirm-actions">
+              <button className="ghost-button" onClick={cancelDeleteItem}>취소</button>
+              <button className="primary-button danger-confirm" onClick={confirmDeleteItem}>확인</button>
+            </div>
+          </section>
+        </div>
+      )}
       <ShellNav activeView={activeView} setActiveView={navigate} />
       <main className="workspace">
         {activeView !== 'schedule' && <StatusStrip title={activeViewLabel} message={syncState.message} offline={syncState.offline} readonly={syncState.readonly} onRefresh={refresh} onLogout={logout} syncState={syncState} />}
