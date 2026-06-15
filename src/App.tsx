@@ -119,7 +119,7 @@ function useMobileLayout() {
 const SCHEDULE_COLUMN_STORAGE_KEY = 'osaka-travel-pwa:schedule-column-widths:v1'
 const DRAFT_ITINERARY_ID_PREFIX = 'draft-itinerary-'
 const CHATGPT_APP_URL = 'https://chatgpt.com/'
-const CHATGPT_ANDROID_INTENT_URL = 'intent://chatgpt.com/#Intent;scheme=https;package=com.openai.chatgpt;S.browser_fallback_url=https%3A%2F%2Fchatgpt.com%2F;end'
+const CHATGPT_ANDROID_INTENT_URL = 'intent://chatgpt.com/#Intent;scheme=https;package=com.openai.chatgpt;end'
 const GOOGLE_MAPS_APP_URL = 'https://www.google.com/maps'
 
 const scheduleColumns = [
@@ -340,7 +340,12 @@ function ScheduleFloatingActions({
     setOpen(false)
   }
   const openChatGpt = () => {
-    openExternalApp(isAndroidDevice() ? CHATGPT_ANDROID_INTENT_URL : CHATGPT_APP_URL)
+    setOpen(false)
+    if (isAndroidDevice()) {
+      window.location.href = CHATGPT_ANDROID_INTENT_URL
+      return
+    }
+    openExternalApp(CHATGPT_APP_URL)
   }
 
   return (
