@@ -1,10 +1,19 @@
 import { createSeedData } from '../data/seed'
+import { sortItineraryItems } from './itinerarySort'
 import type { TravelData } from '../types'
 
 const STORAGE_KEY = 'osaka-travel-pwa:data:v4'
 
 const normalizeTravelData = (data: TravelData): TravelData => ({
   ...data,
+  itineraryItems: sortItineraryItems(data.itineraryItems.map((item) => ({
+    ...item,
+    googlePlaceId: item.googlePlaceId ?? '',
+    googleMapsUri: item.googleMapsUri ?? '',
+    formattedAddress: item.formattedAddress ?? '',
+    lat: item.lat ?? null,
+    lng: item.lng ?? null,
+  }))),
   checklistItems: data.checklistItems.map((item) => ({
     ...item,
     kind: item.kind ?? 'task',

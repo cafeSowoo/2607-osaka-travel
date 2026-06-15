@@ -1,5 +1,6 @@
 import { createClient, type Session, type SupabaseClient } from '@supabase/supabase-js'
 import { categories, createSeedData, seedTrip, tripDays } from '../data/seed'
+import { sortItineraryItems } from './itinerarySort'
 import type { Category, ChecklistItem, ItineraryAiPatch, ItineraryItem, Reservation, TravelData, Trip } from '../types'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
@@ -53,6 +54,11 @@ type ItineraryRow = {
   note: string | null
   budget_jpy: number | string | null
   google_place_query: string | null
+  google_place_id: string | null
+  google_maps_uri: string | null
+  formatted_address: string | null
+  lat: number | string | null
+  lng: number | string | null
   sort_order: number | null
 }
 
@@ -111,6 +117,11 @@ const fromItinerary = (row: ItineraryRow): ItineraryItem => ({
   note: row.note ?? '',
   budgetJpy: Number(row.budget_jpy ?? 0),
   googlePlaceQuery: row.google_place_query ?? '',
+  googlePlaceId: row.google_place_id ?? '',
+  googleMapsUri: row.google_maps_uri ?? '',
+  formattedAddress: row.formatted_address ?? '',
+  lat: row.lat === null || row.lat === undefined ? null : Number(row.lat),
+  lng: row.lng === null || row.lng === undefined ? null : Number(row.lng),
   sortOrder: row.sort_order ?? 0,
 })
 
@@ -128,6 +139,11 @@ const toItinerary = (item: ItineraryItem, userId: string) => ({
   note: item.note.trim(),
   budget_jpy: item.budgetJpy,
   google_place_query: item.googlePlaceQuery.trim(),
+  google_place_id: item.googlePlaceId.trim(),
+  google_maps_uri: item.googleMapsUri.trim(),
+  formatted_address: item.formattedAddress.trim(),
+  lat: item.lat,
+  lng: item.lng,
   sort_order: item.sortOrder,
 })
 
@@ -215,7 +231,7 @@ export const loadSupabaseData = async (session: Session): Promise<TravelData> =>
 
   const [trip, itinerary, reservations, checklist] = await Promise.all([
     supabase.from(TABLES.trips).select('*').eq('id', seedTrip.id).single(),
-    supabase.from(TABLES.itineraryItems).select('*').eq('trip_id', seedTrip.id).order('day_index').order('sort_order'),
+    supabase.from(TABLES.itineraryItems).select('*').eq('trip_id', seedTrip.id).order('day_index').order('start_time').order('end_time').order('sort_order'),
     supabase.from(TABLES.reservations).select('*').eq('trip_id', seedTrip.id).order('sort_order'),
     supabase.from(TABLES.checklistItems).select('*').eq('trip_id', seedTrip.id).order('sort_order'),
   ])
@@ -228,7 +244,7 @@ export const loadSupabaseData = async (session: Session): Promise<TravelData> =>
   return {
     trip: fromTrip(trip.data as TripRow),
     days: tripDays,
-    itineraryItems: ((itinerary.data ?? []) as ItineraryRow[]).map(fromItinerary),
+    itineraryItems: sortItineraryItems(((itinerary.data ?? []) as ItineraryRow[]).map(fromItinerary)),
     reservations: ((reservations.data ?? []) as ReservationRow[]).map(fromReservation),
     checklistItems: ((checklist.data ?? []) as ChecklistRow[]).map(fromChecklist),
   }

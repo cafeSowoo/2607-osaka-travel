@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { readLocalData, writeLocalData } from '../lib/localStore'
+import { sortItineraryItems } from '../lib/itinerarySort'
 import {
   deleteItineraryItem as deleteRemoteItineraryItem,
   deleteChecklistItem as deleteRemoteChecklistItem,
@@ -165,12 +166,17 @@ export const useTravelData = () => {
         note: item.note ?? existing?.note ?? '',
         budgetJpy: Number(item.budgetJpy ?? existing?.budgetJpy ?? 0),
         googlePlaceQuery: item.googlePlaceQuery ?? existing?.googlePlaceQuery ?? '',
+        googlePlaceId: item.googlePlaceId ?? existing?.googlePlaceId ?? '',
+        googleMapsUri: item.googleMapsUri ?? existing?.googleMapsUri ?? '',
+        formattedAddress: item.formattedAddress ?? existing?.formattedAddress ?? '',
+        lat: item.lat ?? existing?.lat ?? null,
+        lng: item.lng ?? existing?.lng ?? null,
         sortOrder: item.sortOrder ?? existing?.sortOrder ?? dayItems.length * 10 + 10,
       }
       const nextItems = existing
         ? data.itineraryItems.map((candidate) => (candidate.id === nextItem.id ? nextItem : candidate))
         : [...data.itineraryItems, nextItem]
-      const next = { ...data, itineraryItems: nextItems.sort((a, b) => a.dayIndex - b.dayIndex || a.sortOrder - b.sortOrder) }
+      const next = { ...data, itineraryItems: sortItineraryItems(nextItems) }
       persist(next, session ? () => saveItineraryItem(nextItem, session) : undefined)
       return nextItem
     },

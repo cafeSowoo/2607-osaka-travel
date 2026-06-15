@@ -655,9 +655,59 @@ textarea { min-height: 56px; resize: vertical; }
   font-weight: 700;
   line-height: 1.2;
 }
+.places-autocomplete-shell {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+.places-autocomplete-slot {
+  min-width: 0;
+  display: block;
+}
+.places-autocomplete-element,
+.places-autocomplete-slot gmp-place-autocomplete {
+  width: 100%;
+  min-height: 40px;
+  display: block;
+}
+.places-autocomplete-status {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.places-autocomplete-status.error {
+  color: var(--danger);
+}
 .search-control { position: relative; display: flex; align-items: center; }
 .search-control svg { position: absolute; left: 10px; color: var(--muted); }
 .search-control input { padding-left: 32px; }
+.map-search-stack {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+.map-search-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  align-items: center;
+  gap: 8px;
+}
+.map-search-row .search-control {
+  min-width: 0;
+}
+.map-search-row .icon-button {
+  width: 38px;
+  min-width: 38px;
+  padding: 0;
+}
+.place-address-preview {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
 .detail-actions {
   position: sticky;
   bottom: 0;

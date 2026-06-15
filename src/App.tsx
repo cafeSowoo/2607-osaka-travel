@@ -6,6 +6,7 @@ import {
   ClipboardCheck,
   Cloud,
   CloudOff,
+  ExternalLink,
   GripVertical,
   Hotel,
   ListChecks,
@@ -36,6 +37,13 @@ import type {
 import './App.css'
 import { categories } from './data/seed'
 import { useTravelData } from './hooks/useTravelData'
+import {
+  createPlaceAutocompleteElement,
+  isGooglePlacesConfigured,
+  readPlaceSelection,
+  type GooglePlaceSelection,
+} from './lib/googleMaps'
+import { sortItineraryItems } from './lib/itinerarySort'
 import { fillItineraryWithAi } from './lib/supabase'
 import type { Category, ChecklistItem, ChecklistItemKind, ItineraryItem, Reservation, SyncState, TripDay } from './types'
 
@@ -119,6 +127,13 @@ const formatTabDate = (day: TripDay) => {
   return `${month}.${date} (${day.label.split(' ').at(-1) ?? ''})`
 }
 const isDraftItineraryItem = (item: ItineraryItem) => item.id.startsWith(DRAFT_ITINERARY_ID_PREFIX)
+const makeGoogleMapsSearchUrl = (query: string) => (
+  `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query.trim().replace(/\s+/g, ' '))}`
+)
+
+const getGoogleMapsQuery = (item: Pick<ItineraryItem, 'googlePlaceQuery' | 'place'>) => (
+  (item.googlePlaceQuery ?? '').trim() || (item.place ?? '').trim()
+)
 
 const categoryToneClasses: Record<Category, string> = {
   이동: 'tone-travel',
@@ -266,7 +281,10 @@ function ScheduleView({
   syncState: SyncState
   onLogout: () => void
 }) {
-  const dayItems = items.filter((item) => item.dayIndex === activeDay)
+  const dayItems = useMemo(
+    () => sortItineraryItems(items.filter((item) => item.dayIndex === activeDay)),
+    [activeDay, items],
+  )
   const dayBudget = dayItems.reduce((sum, item) => sum + item.budgetJpy, 0)
   const mobileStickyRef = useRef<HTMLDivElement>(null)
   const [mobileDetailTop, setMobileDetailTop] = useState<number | null>(null)
@@ -550,6 +568,24 @@ function DetailPanel({
   const update = (patch: Partial<ItineraryItem>) => {
     setDraft((current) => (current ? { ...current, ...patch } : current))
   }
+  const applyGooglePlaceSelection = (selection: GooglePlaceSelection) => {
+    const query = [selection.name, selection.address].filter(Boolean).join(' ')
+    update({
+      place: selection.name || selection.address || draft.place,
+      googlePlaceQuery: query || draft.googlePlaceQuery,
+      googlePlaceId: selection.placeId,
+      googleMapsUri: selection.googleMapsUri,
+      formattedAddress: selection.address,
+      lat: selection.lat,
+      lng: selection.lng,
+    })
+  }
+  const mapsQuery = getGoogleMapsQuery(draft)
+  const mapsTargetUrl = (draft.googleMapsUri ?? '').trim() || (mapsQuery ? makeGoogleMapsSearchUrl(mapsQuery) : '')
+  const openGoogleMapsSearch = () => {
+    if (!mapsTargetUrl) return
+    window.open(mapsTargetUrl, '_blank', 'noopener,noreferrer')
+  }
 
   const fillWithAi = async (event: ReactFormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -656,13 +692,38 @@ function DetailPanel({
           <span className="krw-preview">≈ {formatKrw(draft.budgetJpy, exchangeRate)}</span>
         </span>
       </label>
+      {isGooglePlacesConfigured && (
+        <label className="detail-field">
+          <span className="detail-field-label">장소 선택</span>
+          <GooglePlacesAutocomplete disabled={readonly} onSelect={applyGooglePlaceSelection} />
+        </label>
+      )}
       <label className="detail-field">
-        <span className="detail-field-label">장소 추가</span>
-        <div className="search-control"><Search size={15} /><input disabled placeholder="Google 장소 검색 (v2)" /></div>
-      </label>
-      <label className="detail-field">
-        <span className="detail-field-label">검색어</span>
-        <input value={draft.googlePlaceQuery} disabled={readonly} onChange={(event) => update({ googlePlaceQuery: event.target.value })} />
+        <span className="detail-field-label">지도 검색</span>
+        <span className="map-search-stack">
+          <span className="map-search-row">
+            <span className="search-control">
+              <Search size={15} />
+              <input
+                value={draft.googlePlaceQuery}
+                disabled={readonly}
+                placeholder={draft.place || 'Google Maps 검색어'}
+                onChange={(event) => update({ googlePlaceQuery: event.target.value })}
+              />
+            </span>
+            <button
+              className="icon-button"
+              type="button"
+              aria-label="Google Maps에서 검색"
+              title="Google Maps에서 검색"
+              disabled={!mapsTargetUrl}
+              onClick={openGoogleMapsSearch}
+            >
+              <ExternalLink size={16} />
+            </button>
+          </span>
+          {draft.formattedAddress && <span className="place-address-preview">{draft.formattedAddress}</span>}
+        </span>
       </label>
       <div className="detail-actions">
         <button className="ghost-button danger" disabled={readonly} onClick={() => onDelete(draft.id)}>
@@ -673,6 +734,69 @@ function DetailPanel({
         <button className="primary-button" disabled={readonly} onClick={() => onSave({ ...draft, startTime: normalizeTime(draft.startTime), endTime: normalizeTime(draft.endTime) })}>저장</button>
       </div>
     </aside>
+  )
+}
+
+function GooglePlacesAutocomplete({
+  disabled,
+  onSelect,
+}: {
+  disabled: boolean
+  onSelect: (selection: GooglePlaceSelection) => void
+}) {
+  const containerRef = useRef<HTMLSpanElement | null>(null)
+  const onSelectRef = useRef(onSelect)
+  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+
+  useEffect(() => {
+    onSelectRef.current = onSelect
+  }, [onSelect])
+
+  useEffect(() => {
+    let disposed = false
+    let element: HTMLElement | null = null
+
+    const handleSelect = async (event: Event) => {
+      const selection = await readPlaceSelection(event)
+      if (selection && !disposed) onSelectRef.current(selection)
+    }
+
+    const mountAutocomplete = async () => {
+      try {
+        const nextElement = await createPlaceAutocompleteElement()
+        if (disposed) return
+
+        element = nextElement
+        if (disabled) {
+          element.setAttribute('disabled', '')
+          ;(element as HTMLElement & { disabled?: boolean }).disabled = true
+        }
+        element.addEventListener('gmp-select', handleSelect)
+        containerRef.current?.replaceChildren(element)
+        setStatus('ready')
+      } catch {
+        if (!disposed) setStatus('error')
+      }
+    }
+
+    void mountAutocomplete()
+
+    return () => {
+      disposed = true
+      element?.removeEventListener('gmp-select', handleSelect)
+      element?.remove()
+    }
+  }, [disabled])
+
+  return (
+    <span className="places-autocomplete-shell">
+      <span className="places-autocomplete-slot" ref={containerRef} />
+      {status !== 'ready' && (
+        <span className={`places-autocomplete-status ${status === 'error' ? 'error' : ''}`}>
+          {status === 'error' ? 'Places 연결 실패' : 'Places 준비 중'}
+        </span>
+      )}
+    </span>
   )
 }
 
@@ -1376,29 +1500,41 @@ function App() {
       note: '',
       budgetJpy: 0,
       googlePlaceQuery: '',
+      googlePlaceId: '',
+      googleMapsUri: '',
+      formattedAddress: '',
+      lat: null,
+      lng: null,
       sortOrder: dayItems.length * 10 + 10,
     })
   }
 
   const saveItem = (item: ItineraryItem) => {
     pendingSaveToastRef.current = true
-    const saved = isDraftItineraryItem(item)
-      ? upsertItineraryItem({
-          tripId: item.tripId,
-          dayIndex: item.dayIndex,
-          date: item.date,
-          startTime: item.startTime,
-          endTime: item.endTime,
-          place: item.place,
-          category: item.category,
-          title: item.title,
-          note: item.note,
-          budgetJpy: item.budgetJpy,
-          googlePlaceQuery: item.googlePlaceQuery,
-          sortOrder: item.sortOrder,
-        })
-      : upsertItineraryItem(item)
-    setSelectedItem(saved)
+    if (isDraftItineraryItem(item)) {
+      upsertItineraryItem({
+        tripId: item.tripId,
+        dayIndex: item.dayIndex,
+        date: item.date,
+        startTime: item.startTime,
+        endTime: item.endTime,
+        place: item.place,
+        category: item.category,
+        title: item.title,
+        note: item.note,
+        budgetJpy: item.budgetJpy,
+        googlePlaceQuery: item.googlePlaceQuery,
+        googlePlaceId: item.googlePlaceId,
+        googleMapsUri: item.googleMapsUri,
+        formattedAddress: item.formattedAddress,
+        lat: item.lat,
+        lng: item.lng,
+        sortOrder: item.sortOrder,
+      })
+    } else {
+      upsertItineraryItem(item)
+    }
+    closeScheduleDetail()
   }
 
   const deleteItem = (id: string) => {

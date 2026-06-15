@@ -30,6 +30,11 @@ export type ItineraryItem = {
   note: string
   budgetJpy: number
   googlePlaceQuery: string
+  googlePlaceId: string
+  googleMapsUri: string
+  formattedAddress: string
+  lat: number | null
+  lng: number | null
   sortOrder: number
 }
 
