@@ -72,6 +72,7 @@ const formatKrw = (value: number, rate: number) => `₩${Math.round(value * rate
 const formatBudget = (value: number, showKrw: boolean, rate: number) => showKrw ? formatKrw(value, rate) : formatJpy(value)
 const normalizeTime = (value: string) => value.trim().slice(0, 5)
 const isMobileViewport = () => window.matchMedia('(max-width: 980px)').matches
+const isAndroidDevice = () => /Android/i.test(navigator.userAgent)
 const MOBILE_LAYOUT_QUERY = '(max-width: 980px)'
 
 const isValidTime = (value: string) => {
@@ -118,6 +119,7 @@ function useMobileLayout() {
 const SCHEDULE_COLUMN_STORAGE_KEY = 'osaka-travel-pwa:schedule-column-widths:v1'
 const DRAFT_ITINERARY_ID_PREFIX = 'draft-itinerary-'
 const CHATGPT_APP_URL = 'https://chatgpt.com/'
+const CHATGPT_ANDROID_INTENT_URL = 'intent://chatgpt.com/#Intent;scheme=https;package=com.openai.chatgpt;S.browser_fallback_url=https%3A%2F%2Fchatgpt.com%2F;end'
 const GOOGLE_MAPS_APP_URL = 'https://www.google.com/maps'
 
 const scheduleColumns = [
@@ -337,6 +339,9 @@ function ScheduleFloatingActions({
     window.open(url, '_blank', 'noopener,noreferrer')
     setOpen(false)
   }
+  const openChatGpt = () => {
+    openExternalApp(isAndroidDevice() ? CHATGPT_ANDROID_INTENT_URL : CHATGPT_APP_URL)
+  }
 
   return (
     <>
@@ -350,7 +355,7 @@ function ScheduleFloatingActions({
       )}
       <div className={`schedule-floating-actions ${hidden ? 'is-hidden' : ''} ${activeOpen ? 'is-open' : ''}`}>
         <div className="schedule-floating-menu" aria-hidden={!activeOpen}>
-          <button className="schedule-floating-option" type="button" aria-label="ChatGPT" disabled={disabled} tabIndex={activeOpen ? 0 : -1} onClick={() => openExternalApp(CHATGPT_APP_URL)}>
+          <button className="schedule-floating-option" type="button" aria-label="ChatGPT" disabled={disabled} tabIndex={activeOpen ? 0 : -1} onClick={openChatGpt}>
             <img className="brand-mark chatgpt-mark" src={chatGptActionIcon} alt="" aria-hidden="true" />
           </button>
           <button className="schedule-floating-option" type="button" aria-label="Google Maps" disabled={disabled} tabIndex={activeOpen ? 0 : -1} onClick={() => openExternalApp(GOOGLE_MAPS_APP_URL)}>
