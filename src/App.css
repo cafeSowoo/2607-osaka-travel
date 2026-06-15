@@ -457,6 +457,7 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
 .schedule-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 0; align-items: start; }
 .schedule-main { min-width: 0; }
 .day-tabs {
+  position: relative;
   display: flex;
   gap: 0;
   overflow-x: auto;
@@ -465,7 +466,21 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
   scrollbar-width: none;
 }
 .day-tabs::-webkit-scrollbar { display: none; }
-.day-tabs button {
+.day-tab-indicator {
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 999px;
+  pointer-events: none;
+  transition:
+    transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 160ms ease;
+}
+.day-tabs button,
+.day-tab-button {
   position: relative;
   display: grid;
   place-items: center;
@@ -479,18 +494,14 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
   background: transparent;
   color: var(--text);
   font-weight: 760;
+  transition: color 220ms ease;
 }
-.day-tabs button small { color: var(--muted); font-size: 12px; font-weight: 500; }
-.day-tabs button.active { color: var(--accent); }
-.day-tabs button.active::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -1px;
-  height: 2px;
-  background: var(--accent);
-}
+.day-tabs button small,
+.day-tab-button small { color: var(--muted); font-size: 12px; font-weight: 500; transition: color 220ms ease; }
+.day-tabs button.active,
+.day-tab-button.active { color: var(--accent); }
+.day-tabs button.active small,
+.day-tab-button.active small { color: var(--accent); }
 .itinerary-table { overflow: hidden; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 8px 8px; background: var(--surface); }
 .table-row {
   width: 100%;
@@ -1152,7 +1163,30 @@ textarea { min-height: 56px; resize: vertical; }
     --fab-size: 54px;
     padding-bottom: calc(var(--fab-size) + 24px);
   }
-  .schedule-main.is-day-swipeable { touch-action: pan-y; }
+  .day-itinerary-viewport {
+    overflow: hidden;
+    width: 100%;
+    touch-action: pan-y;
+  }
+  .day-itinerary-track {
+    display: flex;
+    width: 100%;
+    transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform;
+  }
+  .day-itinerary-viewport.is-day-dragging .day-itinerary-track {
+    transition: none;
+  }
+  .day-itinerary-panel {
+    flex: 0 0 100%;
+    width: 100%;
+    min-width: 0;
+  }
+  .mobile-itinerary-table {
+    display: grid;
+    gap: 10px;
+    overflow: visible;
+  }
   .mobile-schedule-sticky {
     position: sticky;
     top: -18px;
@@ -1192,13 +1226,15 @@ textarea { min-height: 56px; resize: vertical; }
     border-radius: 8px 8px 0 0;
     overflow: hidden;
   }
-  .day-tabs.mobile-day-tabs button {
+  .day-tabs.mobile-day-tabs button,
+  .day-tabs.mobile-day-tabs .day-tab-button {
     flex: 1 1 0;
     min-width: 0;
     padding: 8px 4px 10px;
     font-size: 13px;
   }
-  .day-tabs.mobile-day-tabs button small {
+  .day-tabs.mobile-day-tabs button small,
+  .day-tabs.mobile-day-tabs .day-tab-button small {
     font-size: 11px;
   }
   .wide { grid-column: auto; }

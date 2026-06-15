@@ -76,6 +76,13 @@ const isAndroidDevice = () => /Android/i.test(navigator.userAgent)
 const MOBILE_LAYOUT_QUERY = '(max-width: 980px)'
 const DAY_SWIPE_THRESHOLD = 56
 const DAY_SWIPE_AXIS_LOCK = 12
+const DAY_SWIPE_RUBBER_BAND = 0.3
+
+const clampDayDrag = (offset: number, activeIndex: number, dayCount: number) => {
+  if (activeIndex <= 0 && offset > 0) return offset * DAY_SWIPE_RUBBER_BAND
+  if (activeIndex >= dayCount - 1 && offset < 0) return offset * DAY_SWIPE_RUBBER_BAND
+  return offset
+}
 
 const isValidTime = (value: string) => {
   const text = normalizeTime(value)
@@ -335,6 +342,63 @@ function AccountStatus({
   )
 }
 
+function DayTabs({
+  sortedDays,
+  activeDay,
+  onChange,
+  className = '',
+}: {
+  sortedDays: TripDay[]
+  activeDay: number
+  onChange: (dayIndex: number) => void
+  className?: string
+}) {
+  const tabsRef = useRef<HTMLDivElement>(null)
+  const [indicatorStyle, setIndicatorStyle] = useState<CSSProperties>({ opacity: 0 })
+
+  useLayoutEffect(() => {
+    const root = tabsRef.current
+    if (!root) return
+
+    const syncIndicator = () => {
+      const activeButton = root.querySelector<HTMLElement>('.day-tab-button.active')
+      if (!activeButton) return
+      setIndicatorStyle({
+        width: activeButton.offsetWidth,
+        transform: `translateX(${activeButton.offsetLeft}px)`,
+        opacity: 1,
+      })
+    }
+
+    syncIndicator()
+    const resizeObserver = new ResizeObserver(syncIndicator)
+    resizeObserver.observe(root)
+    window.addEventListener('resize', syncIndicator)
+
+    return () => {
+      resizeObserver.disconnect()
+      window.removeEventListener('resize', syncIndicator)
+    }
+  }, [activeDay, sortedDays, className])
+
+  return (
+    <div className={`day-tabs ${className}`} ref={tabsRef}>
+      <span className="day-tab-indicator" style={indicatorStyle} aria-hidden="true" />
+      {sortedDays.map((candidate) => (
+        <button
+          key={candidate.dayIndex}
+          type="button"
+          className={`day-tab-button ${candidate.dayIndex === activeDay ? 'active' : ''}`}
+          onClick={() => onChange(candidate.dayIndex)}
+        >
+          <span>{`Day${candidate.dayIndex}`}</span>
+          <small>{formatTabDate(candidate)}</small>
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function ScheduleFloatingActions({
   hidden,
   disabled,
@@ -442,10 +506,13 @@ function ScheduleView({
     [days],
   )
   const dayBudget = dayItems.reduce((sum, item) => sum + item.budgetJpy, 0)
+  const activeDayIndex = sortedDays.findIndex((day) => day.dayIndex === activeDay)
   const mobileLayout = useMobileLayout()
   const mobileStickyRef = useRef<HTMLDivElement>(null)
   const daySwipeStartRef = useRef<{ x: number; y: number } | null>(null)
   const daySwipeAxisRef = useRef<'horizontal' | 'vertical' | null>(null)
+  const [dayDragOffset, setDayDragOffset] = useState(0)
+  const [isDayDragging, setIsDayDragging] = useState(false)
   const [mobileDetailTop, setMobileDetailTop] = useState<number | null>(null)
   const [columnWidths, setColumnWidths] = useState<ScheduleColumnWidths>(readScheduleColumnWidths)
   const scheduleGridTemplate = useMemo(() => makeScheduleGridTemplate(columnWidths), [columnWidths])
@@ -509,6 +576,8 @@ function ScheduleView({
   const resetDaySwipe = () => {
     daySwipeStartRef.current = null
     daySwipeAxisRef.current = null
+    setIsDayDragging(false)
+    setDayDragOffset(0)
   }
 
   const handleDaySwipeStart = (event: ReactTouchEvent<HTMLDivElement>) => {
@@ -519,6 +588,8 @@ function ScheduleView({
     const touch = event.touches[0]
     daySwipeStartRef.current = { x: touch.clientX, y: touch.clientY }
     daySwipeAxisRef.current = null
+    setIsDayDragging(false)
+    setDayDragOffset(0)
   }
 
   const handleDaySwipeMove = (event: ReactTouchEvent<HTMLDivElement>) => {
@@ -531,6 +602,9 @@ function ScheduleView({
       if (Math.abs(deltaX) < DAY_SWIPE_AXIS_LOCK && Math.abs(deltaY) < DAY_SWIPE_AXIS_LOCK) return
       daySwipeAxisRef.current = Math.abs(deltaX) > Math.abs(deltaY) ? 'horizontal' : 'vertical'
     }
+    if (daySwipeAxisRef.current !== 'horizontal') return
+    setIsDayDragging(true)
+    setDayDragOffset(clampDayDrag(deltaX, activeDayIndex, sortedDays.length))
   }
 
   const handleDaySwipeEnd = (event: ReactTouchEvent<HTMLDivElement>) => {
@@ -541,7 +615,10 @@ function ScheduleView({
     }
     const touch = event.changedTouches[0]
     const deltaX = touch.clientX - start.x
-    resetDaySwipe()
+    daySwipeStartRef.current = null
+    daySwipeAxisRef.current = null
+    setIsDayDragging(false)
+    setDayDragOffset(0)
     if (Math.abs(deltaX) < DAY_SWIPE_THRESHOLD) return
     if (deltaX < 0) goToAdjacentDay(1)
     else goToAdjacentDay(-1)
@@ -554,20 +631,66 @@ function ScheduleView({
     onTouchCancel: resetDaySwipe,
   } : {}
 
+  const dayTrackStyle: CSSProperties = {
+    transform: `translateX(calc(-${Math.max(activeDayIndex, 0) * 100}% + ${dayDragOffset}px))`,
+  }
+
+  const renderItineraryRow = (item: ItineraryItem) => (
+    <button
+      key={item.id}
+      className={`table-row ${categoryToneClasses[item.category]} ${selectedItem?.id === item.id ? 'selected' : ''}`}
+      onClick={() => setSelectedItem(item)}
+    >
+      <span className="mobile-time-stack">
+        <span>{item.startTime || '--:--'}</span>
+        <span className="time-divider">~</span>
+        <span>{item.endTime || '--:--'}</span>
+      </span>
+      <span className="mobile-card-content">
+        <CategoryBadge category={item.category} />
+        <span className="mobile-card-place">{formatPlace(item.place || '장소 미정')}</span>
+        <span className="mobile-card-title">{item.title}</span>
+      </span>
+      <span className="schedule-time">{makeTimeRange(item)}</span>
+      <span className="schedule-place">{formatPlace(item.place || '장소 미정')}</span>
+      <span className="schedule-category"><CategoryBadge category={item.category} /></span>
+      <span className="schedule-title-cell">{item.title}</span>
+      <span className="schedule-note">{item.note || '-'}</span>
+      <span className="schedule-budget">{formatBudget(item.budgetJpy, showKrw, exchangeRate)}</span>
+    </button>
+  )
+
+  const renderMobileDayPanel = (dayIndex: number) => {
+    const panelItems = sortItineraryItems(items.filter((item) => item.dayIndex === dayIndex))
+    const panelBudget = panelItems.reduce((sum, item) => sum + item.budgetJpy, 0)
+
+    return (
+      <div key={dayIndex} className="day-itinerary-panel">
+        <div className="itinerary-table mobile-itinerary-table">
+          {panelItems.length ? panelItems.map(renderItineraryRow) : (
+            <EmptyState text="이 날짜의 일정표가 비어 있습니다." />
+          )}
+          <div className="table-total-row">
+            <span>합계</span>
+            <strong>{formatBudget(panelBudget, showKrw, exchangeRate)}</strong>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   useEffect(() => {
     if (!mobileLayout) return
     mobileStickyRef.current?.closest('.workspace')?.scrollTo({ top: 0, behavior: 'smooth' })
   }, [activeDay, mobileLayout])
 
   const dayTabs = (className = '') => (
-    <div className={`day-tabs ${className}`}>
-      {sortedDays.map((candidate) => (
-        <button key={candidate.dayIndex} className={candidate.dayIndex === activeDay ? 'active' : ''} onClick={() => changeDay(candidate.dayIndex)}>
-          <span>{`Day${candidate.dayIndex}`}</span>
-          <small>{formatTabDate(candidate)}</small>
-        </button>
-      ))}
-    </div>
+    <DayTabs
+      sortedDays={sortedDays}
+      activeDay={activeDay}
+      onChange={changeDay}
+      className={className}
+    />
   )
 
   useLayoutEffect(() => {
@@ -649,8 +772,18 @@ function ScheduleView({
       <ScheduleFloatingActions hidden={Boolean(selectedItem)} disabled={readonly} onAdd={onAdd} />
 
       <div className="schedule-layout">
-        <div className={`schedule-main ${mobileLayout ? 'is-day-swipeable' : ''}`} {...daySwipeHandlers}>
+        <div className="schedule-main">
           {dayTabs('desktop-day-tabs')}
+          {mobileLayout ? (
+            <div
+              className={`day-itinerary-viewport ${isDayDragging ? 'is-day-dragging' : ''}`}
+              {...daySwipeHandlers}
+            >
+              <div className="day-itinerary-track" style={dayTrackStyle}>
+                {sortedDays.map((day) => renderMobileDayPanel(day.dayIndex))}
+              </div>
+            </div>
+          ) : (
           <div className="itinerary-table" style={tableStyle}>
             <div className="table-row head">
               {scheduleColumns.map((column) => (
@@ -666,31 +799,13 @@ function ScheduleView({
                 </span>
               ))}
             </div>
-            {dayItems.length ? dayItems.map((item) => (
-              <button key={item.id} className={`table-row ${categoryToneClasses[item.category]} ${selectedItem?.id === item.id ? 'selected' : ''}`} onClick={() => setSelectedItem(item)}>
-                <span className="mobile-time-stack">
-                  <span>{item.startTime || '--:--'}</span>
-                  <span className="time-divider">~</span>
-                  <span>{item.endTime || '--:--'}</span>
-                </span>
-                <span className="mobile-card-content">
-                  <CategoryBadge category={item.category} />
-                  <span className="mobile-card-place">{formatPlace(item.place || '장소 미정')}</span>
-                  <span className="mobile-card-title">{item.title}</span>
-                </span>
-                <span className="schedule-time">{makeTimeRange(item)}</span>
-                <span className="schedule-place">{formatPlace(item.place || '장소 미정')}</span>
-                <span className="schedule-category"><CategoryBadge category={item.category} /></span>
-                <span className="schedule-title-cell">{item.title}</span>
-                <span className="schedule-note">{item.note || '-'}</span>
-                <span className="schedule-budget">{formatBudget(item.budgetJpy, showKrw, exchangeRate)}</span>
-              </button>
-            )) : <EmptyState text="이 날짜의 일정표가 비어 있습니다." />}
+            {dayItems.length ? dayItems.map(renderItineraryRow) : <EmptyState text="이 날짜의 일정표가 비어 있습니다." />}
             <div className="table-total-row">
               <span>합계</span>
               <strong>{formatBudget(dayBudget, showKrw, exchangeRate)}</strong>
             </div>
           </div>
+          )}
         </div>
         {!mobileLayout && (
           <DetailPanel key={selectedItem?.id ?? 'empty'} {...detailPanelProps} variant="desktop" />
