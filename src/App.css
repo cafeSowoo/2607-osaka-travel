@@ -1328,6 +1328,7 @@ textarea { min-height: 56px; resize: vertical; }
   .mobile-card-head {
     width: 100%;
     min-width: 0;
+    min-height: calc(2 * 1.35em);
     display: flex;
     align-items: center;
     gap: 6px;
@@ -1381,6 +1382,9 @@ textarea { min-height: 56px; resize: vertical; }
   .mobile-card-place {
     flex: 1;
     min-width: 0;
+    min-height: calc(2 * 1.35em);
+    display: flex;
+    align-items: center;
     color: var(--text);
     font-size: 12px;
     font-weight: 760;
