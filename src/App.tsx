@@ -713,12 +713,24 @@ function DetailPanel({
         )}
         <label className="detail-field">
           <span className="detail-field-label">일정표 표시명</span>
-          <input
-            value={draft.place}
-            disabled={readonly}
-            placeholder="일정표에 보이는 이름"
-            onChange={(event) => updatePlaceDisplay(event.target.value)}
-          />
+          <span className="detail-place-inline">
+            <input
+              value={draft.place}
+              disabled={readonly}
+              placeholder="일정표에 보이는 이름"
+              onChange={(event) => updatePlaceDisplay(event.target.value)}
+            />
+            <button
+              className="icon-button maps-open-button"
+              type="button"
+              aria-label="Maps에서 열기"
+              title="Maps에서 열기"
+              disabled={!mapsTargetUrl}
+              onClick={openGoogleMapsSearch}
+            >
+              <ExternalLink size={16} />
+            </button>
+          </span>
         </label>
         {showLinkedPlaceHint && (
           <p className="place-link-hint">표시명만 바뀌었습니다. 지도는 선택한 장소로 열립니다.</p>
@@ -726,18 +738,6 @@ function DetailPanel({
         {draft.formattedAddress && (
           <p className="place-address-preview">{draft.formattedAddress}</p>
         )}
-        <div className="detail-field detail-maps-field">
-          <span className="detail-field-label">지도</span>
-          <button
-            className="ghost-button maps-open-button"
-            type="button"
-            disabled={!mapsTargetUrl}
-            onClick={openGoogleMapsSearch}
-          >
-            Maps에서 열기
-            <ExternalLink size={16} />
-          </button>
-        </div>
       </div>
       <div className="detail-field detail-category-field">
         <span className="detail-field-label">구분</span>
@@ -803,6 +803,7 @@ function GooglePlacesAutocomplete({
   const sessionTokenRef = useRef<object | null>(null)
   const requestIdRef = useRef(0)
   const onSelectRef = useRef(onSelect)
+  const searchEnabledRef = useRef(false)
   const [query, setQuery] = useState(seedQuery)
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([])
   const [open, setOpen] = useState(false)
@@ -834,7 +835,7 @@ function GooglePlacesAutocomplete({
   }, [])
 
   useEffect(() => {
-    if (status !== 'ready' || disabled || !query.trim()) {
+    if (status !== 'ready' || disabled || !query.trim() || !searchEnabledRef.current) {
       return
     }
 
@@ -909,6 +910,7 @@ function GooglePlacesAutocomplete({
           aria-autocomplete="list"
           aria-expanded={open && suggestions.length > 0}
           onChange={(event) => {
+            searchEnabledRef.current = true
             const nextQuery = event.target.value
             setQuery(nextQuery)
             setOpen(Boolean(nextQuery.trim()))
@@ -916,11 +918,12 @@ function GooglePlacesAutocomplete({
               setSuggestions([])
               setSearchError('')
               setSearching(false)
+              searchEnabledRef.current = false
               requestIdRef.current += 1
             }
           }}
           onFocus={() => {
-            if (suggestions.length) setOpen(true)
+            if (searchEnabledRef.current && suggestions.length) setOpen(true)
           }}
         />
       </span>
