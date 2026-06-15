@@ -74,6 +74,8 @@ const normalizeTime = (value: string) => value.trim().slice(0, 5)
 const isMobileViewport = () => window.matchMedia('(max-width: 980px)').matches
 const isAndroidDevice = () => /Android/i.test(navigator.userAgent)
 const MOBILE_LAYOUT_QUERY = '(max-width: 980px)'
+const DAY_SWIPE_THRESHOLD = 56
+const DAY_SWIPE_AXIS_LOCK = 12
 
 const isValidTime = (value: string) => {
   const text = normalizeTime(value)
@@ -167,9 +169,17 @@ const makeScheduleGridTemplate = (widths: ScheduleColumnWidths) => (
   scheduleColumns.map((column) => `${widths[column.id]}px`).join(' ')
 )
 
+const formatLocalDateKey = (date: Date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 const getActiveTripDay = (days: TripDay[]) => {
-  const today = new Date().toISOString().slice(0, 10)
-  return days.find((day) => day.date === today) ?? days[0]
+  const today = formatLocalDateKey(new Date())
+  const sortedDays = [...days].sort((a, b) => a.date.localeCompare(b.date))
+  return sortedDays.findLast((day) => day.date <= today) ?? sortedDays[0] ?? days[0]
 }
 
 const makeTimeRange = (item: ItineraryItem) => `${item.startTime || '--:--'} ~ ${item.endTime || '--:--'}`
@@ -287,7 +297,15 @@ function StatusStrip({
   )
 }
 
-function AccountStatus({ syncState, onLogout }: { syncState: SyncState; onLogout: () => void }) {
+function AccountStatus({
+  syncState,
+  onLogout,
+  showLogout = true,
+}: {
+  syncState: SyncState
+  onLogout?: () => void
+  showLogout?: boolean
+}) {
   const userInitial = syncState.user?.name?.trim().charAt(0) || '旅'
 
   if (!syncState.configured) {
@@ -307,10 +325,12 @@ function AccountStatus({ syncState, onLogout }: { syncState: SyncState; onLogout
           <span>{userInitial}</span>
         )}
       </span>
-      <button className="logout-chip" type="button" onClick={onLogout}>
-        <LogOut size={16} />
-        로그아웃
-      </button>
+      {showLogout && onLogout && (
+        <button className="logout-chip" type="button" onClick={onLogout}>
+          <LogOut size={16} />
+          로그아웃
+        </button>
+      )}
     </div>
   )
 }
@@ -397,7 +417,6 @@ function ScheduleView({
   onSave,
   onDelete,
   syncState,
-  onLogout,
 }: {
   days: TripDay[]
   items: ItineraryItem[]
@@ -413,15 +432,20 @@ function ScheduleView({
   onSave: (item: ItineraryItem) => void
   onDelete: (id: string) => void
   syncState: SyncState
-  onLogout: () => void
 }) {
   const dayItems = useMemo(
     () => sortItineraryItems(items.filter((item) => item.dayIndex === activeDay)),
     [activeDay, items],
   )
+  const sortedDays = useMemo(
+    () => [...days].sort((a, b) => a.dayIndex - b.dayIndex),
+    [days],
+  )
   const dayBudget = dayItems.reduce((sum, item) => sum + item.budgetJpy, 0)
   const mobileLayout = useMobileLayout()
   const mobileStickyRef = useRef<HTMLDivElement>(null)
+  const daySwipeStartRef = useRef<{ x: number; y: number } | null>(null)
+  const daySwipeAxisRef = useRef<'horizontal' | 'vertical' | null>(null)
   const [mobileDetailTop, setMobileDetailTop] = useState<number | null>(null)
   const [columnWidths, setColumnWidths] = useState<ScheduleColumnWidths>(readScheduleColumnWidths)
   const scheduleGridTemplate = useMemo(() => makeScheduleGridTemplate(columnWidths), [columnWidths])
@@ -471,10 +495,74 @@ function ScheduleView({
     }
   }
 
+  const changeDay = useCallback((dayIndex: number) => {
+    setSelectedItem(null)
+    setActiveDay(dayIndex)
+  }, [setActiveDay, setSelectedItem])
+
+  const goToAdjacentDay = useCallback((direction: -1 | 1) => {
+    const currentIndex = sortedDays.findIndex((day) => day.dayIndex === activeDay)
+    const nextDay = sortedDays[currentIndex + direction]
+    if (nextDay) changeDay(nextDay.dayIndex)
+  }, [activeDay, changeDay, sortedDays])
+
+  const resetDaySwipe = () => {
+    daySwipeStartRef.current = null
+    daySwipeAxisRef.current = null
+  }
+
+  const handleDaySwipeStart = (event: ReactTouchEvent<HTMLDivElement>) => {
+    if (selectedItem || event.touches.length !== 1 || isDaySwipeBlocked(event.target)) {
+      resetDaySwipe()
+      return
+    }
+    const touch = event.touches[0]
+    daySwipeStartRef.current = { x: touch.clientX, y: touch.clientY }
+    daySwipeAxisRef.current = null
+  }
+
+  const handleDaySwipeMove = (event: ReactTouchEvent<HTMLDivElement>) => {
+    const start = daySwipeStartRef.current
+    if (!start || event.touches.length !== 1) return
+    const touch = event.touches[0]
+    const deltaX = touch.clientX - start.x
+    const deltaY = touch.clientY - start.y
+    if (daySwipeAxisRef.current === null) {
+      if (Math.abs(deltaX) < DAY_SWIPE_AXIS_LOCK && Math.abs(deltaY) < DAY_SWIPE_AXIS_LOCK) return
+      daySwipeAxisRef.current = Math.abs(deltaX) > Math.abs(deltaY) ? 'horizontal' : 'vertical'
+    }
+  }
+
+  const handleDaySwipeEnd = (event: ReactTouchEvent<HTMLDivElement>) => {
+    const start = daySwipeStartRef.current
+    if (!start || daySwipeAxisRef.current !== 'horizontal') {
+      resetDaySwipe()
+      return
+    }
+    const touch = event.changedTouches[0]
+    const deltaX = touch.clientX - start.x
+    resetDaySwipe()
+    if (Math.abs(deltaX) < DAY_SWIPE_THRESHOLD) return
+    if (deltaX < 0) goToAdjacentDay(1)
+    else goToAdjacentDay(-1)
+  }
+
+  const daySwipeHandlers = mobileLayout ? {
+    onTouchStart: handleDaySwipeStart,
+    onTouchMove: handleDaySwipeMove,
+    onTouchEnd: handleDaySwipeEnd,
+    onTouchCancel: resetDaySwipe,
+  } : {}
+
+  useEffect(() => {
+    if (!mobileLayout) return
+    mobileStickyRef.current?.closest('.workspace')?.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [activeDay, mobileLayout])
+
   const dayTabs = (className = '') => (
     <div className={`day-tabs ${className}`}>
-      {days.map((candidate) => (
-        <button key={candidate.dayIndex} className={candidate.dayIndex === activeDay ? 'active' : ''} onClick={() => setActiveDay(candidate.dayIndex)}>
+      {sortedDays.map((candidate) => (
+        <button key={candidate.dayIndex} className={candidate.dayIndex === activeDay ? 'active' : ''} onClick={() => changeDay(candidate.dayIndex)}>
           <span>{`Day${candidate.dayIndex}`}</span>
           <small>{formatTabDate(candidate)}</small>
         </button>
@@ -530,7 +618,7 @@ function ScheduleView({
         <header className="schedule-header">
           <div className="schedule-title">
             <h1>{tripTitle}</h1>
-            <AccountStatus syncState={syncState} onLogout={onLogout} />
+            <AccountStatus syncState={syncState} showLogout={false} />
           </div>
         </header>
         {dayTabs('mobile-day-tabs')}
@@ -554,14 +642,14 @@ function ScheduleView({
       <header className="schedule-header">
         <div className="schedule-title">
           <h1>{tripTitle}</h1>
-          <AccountStatus syncState={syncState} onLogout={onLogout} />
+          <AccountStatus syncState={syncState} showLogout={false} />
         </div>
       </header>
 
       <ScheduleFloatingActions hidden={Boolean(selectedItem)} disabled={readonly} onAdd={onAdd} />
 
       <div className="schedule-layout">
-        <div className="schedule-main">
+        <div className={`schedule-main ${mobileLayout ? 'is-day-swipeable' : ''}`} {...daySwipeHandlers}>
           {dayTabs('desktop-day-tabs')}
           <div className="itinerary-table" style={tableStyle}>
             <div className="table-row head">
@@ -614,6 +702,12 @@ function ScheduleView({
 
 function isDetailPanelDragBlocked(target: EventTarget | null) {
   return target instanceof Element && Boolean(target.closest('.detail-actions, button, input, select, textarea, label, .search-control, .category-badge-strip'))
+}
+
+function isDaySwipeBlocked(target: EventTarget | null) {
+  return target instanceof Element && Boolean(
+    target.closest('.day-tabs, .schedule-floating-actions, .mobile-detail-overlay, .detail-panel, input, textarea, select, .column-resizer, .places-suggestion-list'),
+  )
 }
 
 function DetailPanel({
@@ -1604,18 +1698,40 @@ function SettingsView({
   showKrw,
   setShowKrw,
   onExchangeRate,
-  configured,
-  authenticated,
+  syncState,
+  onLogout,
 }: {
   exchangeRate: number
   showKrw: boolean
   setShowKrw: (value: boolean) => void
   onExchangeRate: (value: number) => void
-  configured: boolean
-  authenticated: boolean
+  syncState: SyncState
+  onLogout: () => void
 }) {
+  const userLabel = syncState.user?.name || syncState.user?.email || '로그인 계정'
+
   return (
     <section className="settings-grid">
+      <article className="panel">
+        <div className="panel-header">
+          <h3>계정</h3>
+        </div>
+        <div className="settings-account-row">
+          <AccountStatus syncState={syncState} showLogout={false} />
+          <div className="settings-account-copy">
+            <strong>{userLabel}</strong>
+            {syncState.user?.email && syncState.user.name && (
+              <span className="settings-line">{syncState.user.email}</span>
+            )}
+          </div>
+        </div>
+        {syncState.configured && (
+          <button className="logout-chip settings-logout-button" type="button" onClick={onLogout}>
+            <LogOut size={16} />
+            로그아웃
+          </button>
+        )}
+      </article>
       <article className="panel">
         <div className="panel-header">
           <h3>예산 표시</h3>
@@ -1637,8 +1753,8 @@ function SettingsView({
         <div className="panel-header">
           <h3>동기화</h3>
         </div>
-        <p className="settings-line">Supabase 설정: <strong>{configured ? '완료' : '없음'}</strong></p>
-        <p className="settings-line">로그인 상태: <strong>{authenticated ? '활성' : '비활성'}</strong></p>
+        <p className="settings-line">Supabase 설정: <strong>{syncState.configured ? '완료' : '없음'}</strong></p>
+        <p className="settings-line">로그인 상태: <strong>{syncState.authenticated ? '활성' : '비활성'}</strong></p>
         <p className="muted-note">GitHub Pages 배포 후 Supabase Auth redirect URL에 배포 주소를 추가하세요.</p>
       </article>
     </section>
@@ -1887,7 +2003,6 @@ function App() {
             onSave={saveItem}
             onDelete={deleteItem}
             syncState={syncState}
-            onLogout={logout}
           />
         )}
         {activeView === 'reservations' && <ReservationsView reservations={data.reservations} />}
@@ -1908,8 +2023,8 @@ function App() {
             showKrw={showKrw}
             setShowKrw={setShowKrw}
             onExchangeRate={(exchangeRate) => updateTrip({ ...data.trip, exchangeRate })}
-            configured={syncState.configured}
-            authenticated={syncState.authenticated}
+            syncState={syncState}
+            onLogout={logout}
           />
         )}
       </main>

@@ -1102,6 +1102,25 @@ textarea { min-height: 56px; resize: vertical; }
   font-weight: 800;
 }
 .settings-line { color: var(--muted); }
+.settings-account-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.settings-account-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.settings-account-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.settings-logout-button {
+  width: fit-content;
+  margin-top: 14px;
+}
 .muted-note { color: var(--muted); font-size: 13px; }
 .empty-state { min-height: 140px; display: grid; place-items: center; gap: 8px; color: var(--muted); }
 
@@ -1112,10 +1131,14 @@ textarea { min-height: 56px; resize: vertical; }
 .mobile-tabs { display: none; }
 
 @media (max-width: 980px) {
-  .app-shell { display: block; min-height: 100dvh; }
+  .app-shell {
+    --mobile-tab-bar-height: calc(68px + env(safe-area-inset-bottom, 0px));
+    display: block;
+    min-height: 100dvh;
+  }
   .side-nav { display: none; }
   .workspace {
-    height: calc(100dvh - 92px);
+    height: calc(100dvh - var(--mobile-tab-bar-height));
     overflow-y: auto;
     padding: 18px 14px 22px;
     scrollbar-width: none;
@@ -1126,14 +1149,17 @@ textarea { min-height: 56px; resize: vertical; }
   .today-grid, .view-grid, .schedule-layout, .checklist-board, .settings-grid { grid-template-columns: 1fr; }
   .schedule-screen {
     gap: 0;
+    --fab-size: 54px;
+    padding-bottom: calc(var(--fab-size) + 24px);
   }
+  .schedule-main.is-day-swipeable { touch-action: pan-y; }
   .mobile-schedule-sticky {
     position: sticky;
     top: -18px;
     z-index: 15;
     display: grid;
-    gap: 16px;
-    margin: -18px -14px 28px;
+    gap: 12px;
+    margin: -18px -14px 16px;
     padding: 18px 14px 0;
     background: var(--bg);
     border-bottom: 1px solid rgba(209, 216, 226, 0.86);
@@ -1145,12 +1171,12 @@ textarea { min-height: 56px; resize: vertical; }
   .schedule-header { display: grid; grid-template-columns: minmax(0, 1fr); align-items: stretch; justify-items: stretch; gap: 14px; }
   .schedule-header > * { justify-self: stretch; }
   .schedule-title { width: 100%; justify-content: space-between; }
-  .schedule-title h1 { min-width: 0; }
+  .schedule-title h1 { min-width: 0; font-size: 24px; }
   .schedule-actions { justify-content: flex-start; }
   .schedule-floating-actions {
     --fab-size: 54px;
     right: max(18px, env(safe-area-inset-right));
-    bottom: calc(92px + env(safe-area-inset-bottom, 0px) + 16px);
+    bottom: calc(var(--mobile-tab-bar-height) + 16px);
     z-index: 19;
   }
   .account-cluster { margin-left: auto; }
@@ -1159,12 +1185,24 @@ textarea { min-height: 56px; resize: vertical; }
   .logout-chip { min-height: 34px; padding: 0 11px; }
   .day-tabs { grid-template-columns: repeat(5, minmax(82px, 1fr)); }
   .desktop-day-tabs { display: none; }
-  .mobile-day-tabs {
-    margin: 0 -14px;
-    padding: 0 14px;
+  .day-tabs.mobile-day-tabs {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border-radius: 8px 8px 0 0;
+    overflow: hidden;
+  }
+  .day-tabs.mobile-day-tabs button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 8px 4px 10px;
+    font-size: 13px;
+  }
+  .day-tabs.mobile-day-tabs button small {
+    font-size: 11px;
   }
   .wide { grid-column: auto; }
-  .itinerary-table { border: 0; background: transparent; display: grid; gap: 10px; }
+  .itinerary-table { border: 0; background: transparent; display: grid; gap: 10px; overflow: visible; }
   .table-row.head { display: none; }
   .table-row {
     grid-template-columns: 46px minmax(0, 1fr);
@@ -1263,7 +1301,7 @@ textarea { min-height: 56px; resize: vertical; }
     position: fixed;
     top: var(--mobile-detail-top, 180px);
     right: 0;
-    bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+    bottom: var(--mobile-tab-bar-height);
     left: 0;
     z-index: 12;
     padding: 8px 14px 0;
@@ -1275,7 +1313,7 @@ textarea { min-height: 56px; resize: vertical; }
     width: 100%;
     display: grid;
     min-height: 0;
-    max-height: min(520px, calc(100dvh - var(--mobile-detail-top, 180px) - 108px));
+    max-height: min(520px, calc(100dvh - var(--mobile-detail-top, 180px) - var(--mobile-tab-bar-height) - 16px));
     overflow-y: auto;
     gap: 8px;
     margin: 0;
