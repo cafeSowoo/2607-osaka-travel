@@ -69,6 +69,49 @@ const formatKrw = (value: number, rate: number) => `₩${Math.round(value * rate
 const formatBudget = (value: number, showKrw: boolean, rate: number) => showKrw ? formatKrw(value, rate) : formatJpy(value)
 const normalizeTime = (value: string) => value.trim().slice(0, 5)
 const isMobileViewport = () => window.matchMedia('(max-width: 980px)').matches
+const MOBILE_LAYOUT_QUERY = '(max-width: 980px)'
+
+const isValidTime = (value: string) => {
+  const text = normalizeTime(value)
+  if (!/^\d{2}:\d{2}$/.test(text)) return false
+  const [hours, minutes] = text.split(':').map(Number)
+  return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59
+}
+
+type ItineraryDraftValidation =
+  | { ok: true; startTime: string; endTime: string }
+  | { ok: false; message: string }
+
+const validateItineraryDraft = (item: ItineraryItem): ItineraryDraftValidation => {
+  if (!item.place.trim() && !item.title.trim()) {
+    return { ok: false, message: '장소 또는 내용 중 하나는 입력해야 합니다.' }
+  }
+
+  const startTime = normalizeTime(item.startTime)
+  const endTime = normalizeTime(item.endTime)
+  if (!isValidTime(startTime)) {
+    return { ok: false, message: '시작 시간을 HH:MM 형식으로 입력하세요. (예: 09:00)' }
+  }
+  if (!isValidTime(endTime)) {
+    return { ok: false, message: '종료 시간을 HH:MM 형식으로 입력하세요. (예: 10:00)' }
+  }
+
+  return { ok: true, startTime, endTime }
+}
+
+function useMobileLayout() {
+  const [mobileLayout, setMobileLayout] = useState(isMobileViewport)
+
+  useEffect(() => {
+    const media = window.matchMedia(MOBILE_LAYOUT_QUERY)
+    const syncLayout = () => setMobileLayout(media.matches)
+    syncLayout()
+    media.addEventListener('change', syncLayout)
+    return () => media.removeEventListener('change', syncLayout)
+  }, [])
+
+  return mobileLayout
+}
 const SCHEDULE_COLUMN_STORAGE_KEY = 'osaka-travel-pwa:schedule-column-widths:v1'
 const DRAFT_ITINERARY_ID_PREFIX = 'draft-itinerary-'
 
@@ -303,6 +346,7 @@ function ScheduleView({
     [activeDay, items],
   )
   const dayBudget = dayItems.reduce((sum, item) => sum + item.budgetJpy, 0)
+  const mobileLayout = useMobileLayout()
   const mobileStickyRef = useRef<HTMLDivElement>(null)
   const [mobileDetailTop, setMobileDetailTop] = useState<number | null>(null)
   const [columnWidths, setColumnWidths] = useState<ScheduleColumnWidths>(readScheduleColumnWidths)
@@ -396,6 +440,16 @@ function ScheduleView({
         '--mobile-detail-top': `${mobileDetailTop}px`,
       } as CSSProperties)
 
+  const detailPanelProps = {
+    item: selectedItem,
+    dayItems,
+    readonly,
+    exchangeRate,
+    onClose: () => setSelectedItem(null),
+    onSave,
+    onDelete,
+  }
+
   return (
     <section className="schedule-screen">
       <div className="mobile-schedule-sticky" ref={mobileStickyRef}>
@@ -408,7 +462,7 @@ function ScheduleView({
         {dayTabs('mobile-day-tabs')}
       </div>
 
-      {selectedItem && (
+      {mobileLayout && selectedItem && (
         <div
           className="mobile-detail-overlay"
           role="presentation"
@@ -417,13 +471,7 @@ function ScheduleView({
         >
           <DetailPanel
             key={`mobile-${selectedItem.id}`}
-            item={selectedItem}
-            dayItems={dayItems}
-            readonly={readonly}
-            exchangeRate={exchangeRate}
-            onClose={() => setSelectedItem(null)}
-            onSave={onSave}
-            onDelete={onDelete}
+            {...detailPanelProps}
             variant="mobile"
           />
         </div>
@@ -484,7 +532,9 @@ function ScheduleView({
             </div>
           </div>
         </div>
-        <DetailPanel key={selectedItem?.id ?? 'empty'} item={selectedItem} dayItems={dayItems} readonly={readonly} exchangeRate={exchangeRate} onClose={() => setSelectedItem(null)} onSave={onSave} onDelete={onDelete} variant="desktop" />
+        {!mobileLayout && (
+          <DetailPanel key={selectedItem?.id ?? 'empty'} {...detailPanelProps} variant="desktop" />
+        )}
       </div>
     </section>
   )
@@ -518,6 +568,7 @@ function DetailPanel({
   const [aiCommand, setAiCommand] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState('')
+  const [saveError, setSaveError] = useState('')
   const dragStartY = useRef<number | null>(null)
   const pointerStartY = useRef<number | null>(null)
   const dragOffsetRef = useRef(0)
@@ -584,6 +635,7 @@ function DetailPanel({
   }
 
   const update = (patch: Partial<ItineraryItem>) => {
+    setSaveError('')
     setDraft((current) => (current ? { ...current, ...patch } : current))
   }
   const applyGooglePlaceSelection = (selection: GooglePlaceSelection) => {
@@ -614,10 +666,17 @@ function DetailPanel({
     && draft.place.trim() !== linkedPlaceLabel.trim(),
   )
   const saveDraft = () => {
+    const validation = validateItineraryDraft(draft)
+    if (!validation.ok) {
+      setSaveError(validation.message)
+      return
+    }
+
+    setSaveError('')
     onSave({
       ...draft,
-      startTime: normalizeTime(draft.startTime),
-      endTime: normalizeTime(draft.endTime),
+      startTime: validation.startTime,
+      endTime: validation.endTime,
       googlePlaceQuery: (draft.googlePlaceId ?? '').trim()
         ? draft.googlePlaceQuery
         : (draft.googlePlaceQuery.trim() || draft.place.trim()),
@@ -778,6 +837,7 @@ function DetailPanel({
           <span className="krw-preview">≈ {formatKrw(draft.budgetJpy, exchangeRate)}</span>
         </span>
       </label>
+      {saveError && <p className="detail-save-error">{saveError}</p>}
       <div className="detail-actions">
         <button className="ghost-button danger" disabled={readonly} onClick={() => onDelete(draft.id)}>
           <Trash2 size={16} />
