@@ -1,4 +1,5 @@
 import {
+  ArrowUpRight,
   CalendarDays,
   CheckCircle2,
   ChevronRight,
@@ -6,7 +7,6 @@ import {
   ClipboardCheck,
   Cloud,
   CloudOff,
-  ExternalLink,
   GripVertical,
   Hotel,
   ListChecks,
@@ -199,6 +199,11 @@ const isDraftItineraryItem = (item: ItineraryItem) => item.id.startsWith(DRAFT_I
 const makeGoogleMapsSearchUrl = (query: string) => (
   `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query.trim().replace(/\s+/g, ' '))}`
 )
+
+const getItineraryMapsTargetUrl = (item: Pick<ItineraryItem, 'googlePlaceQuery' | 'place' | 'googleMapsUri'>) => {
+  const mapsQuery = getGoogleMapsQuery(item)
+  return (item.googleMapsUri ?? '').trim() || (mapsQuery ? makeGoogleMapsSearchUrl(mapsQuery) : '')
+}
 
 const getGoogleMapsQuery = (item: Pick<ItineraryItem, 'googlePlaceQuery' | 'place'>) => (
   (item.googlePlaceQuery ?? '').trim() || (item.place ?? '').trim()
@@ -647,9 +652,33 @@ function ScheduleView({
         <span>{item.endTime || '--:--'}</span>
       </span>
       <span className="mobile-card-content">
-        <CategoryBadge category={item.category} />
-        <span className="mobile-card-place">{formatPlace(item.place || '장소 미정')}</span>
-        <span className="mobile-card-title">{item.title}</span>
+        <button
+          type="button"
+          className="icon-button maps-open-button mobile-card-maps-button"
+          aria-label="Maps에서 열기"
+          title="Maps에서 열기"
+          disabled={!getItineraryMapsTargetUrl(item)}
+          onClick={(event) => {
+            event.stopPropagation()
+            const mapsTargetUrl = getItineraryMapsTargetUrl(item)
+            if (!mapsTargetUrl) return
+            window.open(mapsTargetUrl, '_blank', 'noopener,noreferrer')
+          }}
+        >
+          <ArrowUpRight size={15} strokeWidth={2.25} aria-hidden="true" />
+        </button>
+        <span className="mobile-card-head">
+          <CategoryBadge category={item.category} />
+          <span className="mobile-card-place">{formatPlace(item.place || '장소 미정')}</span>
+        </span>
+        {(item.title || item.budgetJpy > 0) ? (
+          <span className="mobile-card-footer">
+            <span className="mobile-card-title">{item.title}</span>
+            {item.budgetJpy > 0 ? (
+              <span className="mobile-card-budget">{formatJpy(item.budgetJpy)}</span>
+            ) : null}
+          </span>
+        ) : null}
       </span>
       <span className="schedule-time">{makeTimeRange(item)}</span>
       <span className="schedule-place">{formatPlace(item.place || '장소 미정')}</span>
@@ -821,7 +850,7 @@ function isDetailPanelDragBlocked(target: EventTarget | null) {
 
 function isDaySwipeBlocked(target: EventTarget | null) {
   return target instanceof Element && Boolean(
-    target.closest('.day-tabs, .schedule-floating-actions, .mobile-detail-overlay, .detail-panel, input, textarea, select, .column-resizer, .places-suggestion-list'),
+    target.closest('.day-tabs, .schedule-floating-actions, .mobile-detail-overlay, .detail-panel, .mobile-card-maps-button, input, textarea, select, .column-resizer, .places-suggestion-list'),
   )
 }
 
@@ -963,8 +992,7 @@ function DetailPanel({
         : (draft.googlePlaceQuery.trim() || draft.place.trim()),
     })
   }
-  const mapsQuery = getGoogleMapsQuery(draft)
-  const mapsTargetUrl = (draft.googleMapsUri ?? '').trim() || (mapsQuery ? makeGoogleMapsSearchUrl(mapsQuery) : '')
+  const mapsTargetUrl = getItineraryMapsTargetUrl(draft)
   const openGoogleMapsSearch = () => {
     if (!mapsTargetUrl) return
     window.open(mapsTargetUrl, '_blank', 'noopener,noreferrer')
@@ -1068,7 +1096,7 @@ function DetailPanel({
               disabled={!mapsTargetUrl}
               onClick={openGoogleMapsSearch}
             >
-              <ExternalLink size={16} />
+              <ArrowUpRight size={15} strokeWidth={2.25} aria-hidden="true" />
             </button>
           </span>
         </label>

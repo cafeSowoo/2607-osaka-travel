@@ -391,8 +391,10 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
   border-radius: 999px;
 }
 .schedule-floating-option {
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   border: 1px solid var(--line);
   background: #fff;
   color: #111827;
@@ -427,12 +429,16 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
   width: 34px;
   height: 34px;
   display: block;
+  flex-shrink: 0;
+  margin: 0;
   object-fit: contain;
+  object-position: center;
   border-radius: 999px;
 }
 .chatgpt-mark {
   width: 32px;
   height: 32px;
+  transform: translate(-1px, -2px);
 }
 .google-maps-mark {
   width: 34px;
@@ -843,18 +849,30 @@ textarea { min-height: 56px; resize: vertical; }
 .detail-place-inline {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 38px;
+  grid-template-columns: minmax(0, 1fr) 32px;
   align-items: center;
   gap: 8px;
 }
 .detail-place-inline input {
   min-width: 0;
 }
+.detail-place-inline .maps-open-button {
+  width: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  height: 32px;
+  border-radius: 7px;
+}
 .maps-open-button {
   width: 38px;
   min-width: 38px;
   height: 34px;
   padding: 0;
+  color: #64748b;
+}
+.maps-open-button:not(:disabled):hover {
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 .place-address-preview {
   min-width: 0;
@@ -1291,17 +1309,67 @@ textarea { min-height: 56px; resize: vertical; }
     font-weight: 900;
   }
   .table-row > .mobile-card-content {
+    position: relative;
     width: 100%;
-    min-height: 78px;
+    min-width: 0;
+    min-height: 0;
     justify-self: end;
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
     align-content: start;
-    gap: 4px;
-    padding: 10px 11px 11px;
+    gap: 2px;
+    padding: 8px 36px 8px 10px;
     border: 1px solid currentColor;
     border-radius: 7px;
     background: var(--mobile-card-bg, var(--surface));
     color: var(--mobile-card-border, var(--line));
+  }
+  .mobile-card-head {
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .mobile-card-maps-button {
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    width: 26px;
+    min-width: 26px;
+    min-height: 26px;
+    height: 26px;
+    padding: 0;
+    border-radius: 999px;
+    border: 0;
+    background: rgba(255, 255, 255, 0.72);
+    color: #64748b;
+    box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.28);
+  }
+  .mobile-card-maps-button:not(:disabled):active {
+    background: var(--accent-soft);
+    color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent-line);
+  }
+  .mobile-card-footer {
+    width: 100%;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    column-gap: 10px;
+  }
+  .mobile-card-budget {
+    grid-column: 2;
+    justify-self: end;
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    color: #4b5563;
+    font-size: 11px;
+    font-weight: 850;
+    line-height: 1.2;
   }
   .table-row.tone-travel .mobile-card-content { --mobile-card-border: #d8e9fb; }
   .table-row.tone-meal .mobile-card-content { --mobile-card-border: #f4dfcf; }
@@ -1311,17 +1379,25 @@ textarea { min-height: 56px; resize: vertical; }
   .table-row.tone-rest .mobile-card-content,
   .table-row.tone-etc .mobile-card-content { --mobile-card-border: #dde3eb; }
   .mobile-card-place {
+    flex: 1;
+    min-width: 0;
     color: var(--text);
     font-size: 12px;
     font-weight: 760;
-    line-height: 1.45;
+    line-height: 1.35;
   }
   .mobile-card-title {
+    grid-column: 1;
+    min-width: 0;
     color: #4b5563;
     font-size: 12px;
     line-height: 1.45;
   }
+  .mobile-card-title:empty {
+    display: none;
+  }
   .category-badge {
+    flex-shrink: 0;
     justify-self: start;
     min-width: auto;
     height: 20px;
