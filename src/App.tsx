@@ -117,26 +117,8 @@ function useMobileLayout() {
 }
 const SCHEDULE_COLUMN_STORAGE_KEY = 'osaka-travel-pwa:schedule-column-widths:v1'
 const DRAFT_ITINERARY_ID_PREFIX = 'draft-itinerary-'
-const CHATGPT_WEB_URL = 'https://chatgpt.com/'
-const CHATGPT_ANDROID_INTENT = [
-  'intent:#Intent',
-  ';package=com.openai.chatgpt',
-  ';action=android.intent.action.MAIN',
-  ';category=android.intent.category.LAUNCHER',
-  `;S.browser_fallback_url=${encodeURIComponent(CHATGPT_WEB_URL)}`,
-  ';end',
-].join('')
+const CHATGPT_APP_URL = 'https://chatgpt.com/'
 const GOOGLE_MAPS_APP_URL = 'https://www.google.com/maps'
-
-const isAndroidDevice = () => /Android/i.test(navigator.userAgent)
-
-const openChatGpt = () => {
-  if (isAndroidDevice()) {
-    window.location.assign(CHATGPT_ANDROID_INTENT)
-    return
-  }
-  window.open(CHATGPT_WEB_URL, '_blank', 'noopener,noreferrer')
-}
 
 const scheduleColumns = [
   { id: 'time', label: '시간', defaultWidth: 118, minWidth: 96, maxWidth: 180 },
@@ -355,10 +337,6 @@ function ScheduleFloatingActions({
     window.open(url, '_blank', 'noopener,noreferrer')
     setOpen(false)
   }
-  const handleOpenChatGpt = () => {
-    openChatGpt()
-    setOpen(false)
-  }
 
   return (
     <>
@@ -372,7 +350,7 @@ function ScheduleFloatingActions({
       )}
       <div className={`schedule-floating-actions ${hidden ? 'is-hidden' : ''} ${activeOpen ? 'is-open' : ''}`}>
         <div className="schedule-floating-menu" aria-hidden={!activeOpen}>
-          <button className="schedule-floating-option" type="button" aria-label="ChatGPT" disabled={disabled} tabIndex={activeOpen ? 0 : -1} onClick={handleOpenChatGpt}>
+          <button className="schedule-floating-option" type="button" aria-label="ChatGPT" disabled={disabled} tabIndex={activeOpen ? 0 : -1} onClick={() => openExternalApp(CHATGPT_APP_URL)}>
             <img className="brand-mark chatgpt-mark" src={chatGptActionIcon} alt="" aria-hidden="true" />
           </button>
           <button className="schedule-floating-option" type="button" aria-label="Google Maps" disabled={disabled} tabIndex={activeOpen ? 0 : -1} onClick={() => openExternalApp(GOOGLE_MAPS_APP_URL)}>
