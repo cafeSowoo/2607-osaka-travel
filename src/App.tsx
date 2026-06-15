@@ -38,10 +38,12 @@ import './App.css'
 import { categories } from './data/seed'
 import { useTravelData } from './hooks/useTravelData'
 import {
-  createPlaceAutocompleteElement,
+  createAutocompleteSessionToken,
+  fetchPlaceSuggestions,
   isGooglePlacesConfigured,
-  readPlaceSelection,
+  resolvePlaceFromPrediction,
   type GooglePlaceSelection,
+  type PlaceSuggestion,
 } from './lib/googleMaps'
 import { sortItineraryItems } from './lib/itinerarySort'
 import { fillItineraryWithAi } from './lib/supabase'
@@ -134,6 +136,21 @@ const makeGoogleMapsSearchUrl = (query: string) => (
 const getGoogleMapsQuery = (item: Pick<ItineraryItem, 'googlePlaceQuery' | 'place'>) => (
   (item.googlePlaceQuery ?? '').trim() || (item.place ?? '').trim()
 )
+
+const inferLinkedPlaceLabel = (item: Pick<ItineraryItem, 'place' | 'googlePlaceQuery' | 'formattedAddress' | 'googlePlaceId'>) => {
+  if (!(item.googlePlaceId ?? '').trim()) return ''
+  const address = (item.formattedAddress ?? '').trim()
+  const query = (item.googlePlaceQuery ?? '').trim()
+  if (address && query.endsWith(address)) return query.slice(0, query.length - address.length).trim()
+  if (address && query.includes(address)) return query.replace(address, '').trim()
+  return (item.place ?? '').trim()
+}
+
+const getPlaceSearchSeed = (item: Pick<ItineraryItem, 'place' | 'googlePlaceQuery' | 'formattedAddress' | 'googlePlaceId'>) => {
+  const linkedLabel = inferLinkedPlaceLabel(item)
+  if (linkedLabel) return linkedLabel
+  return getGoogleMapsQuery(item)
+}
 
 const categoryToneClasses: Record<Category, string> = {
   이동: 'tone-travel',
@@ -497,6 +514,7 @@ function DetailPanel({
   variant?: 'desktop' | 'mobile'
 }) {
   const [draft, setDraft] = useState<ItineraryItem | null>(item)
+  const [linkedPlaceLabel, setLinkedPlaceLabel] = useState(() => (item ? inferLinkedPlaceLabel(item) : ''))
   const [aiCommand, setAiCommand] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState('')
@@ -570,14 +588,39 @@ function DetailPanel({
   }
   const applyGooglePlaceSelection = (selection: GooglePlaceSelection) => {
     const query = [selection.name, selection.address].filter(Boolean).join(' ')
+    const nextPlace = selection.name || selection.address || draft.place
+    setLinkedPlaceLabel(selection.name || nextPlace)
     update({
-      place: selection.name || selection.address || draft.place,
+      place: nextPlace,
       googlePlaceQuery: query || draft.googlePlaceQuery,
       googlePlaceId: selection.placeId,
       googleMapsUri: selection.googleMapsUri,
       formattedAddress: selection.address,
       lat: selection.lat,
       lng: selection.lng,
+    })
+  }
+  const updatePlaceDisplay = (value: string) => {
+    if (!(draft.googlePlaceId ?? '').trim()) {
+      update({ place: value, googlePlaceQuery: value })
+      return
+    }
+    update({ place: value })
+  }
+  const showLinkedPlaceHint = Boolean(
+    (draft.googlePlaceId ?? '').trim()
+    && draft.place.trim()
+    && linkedPlaceLabel.trim()
+    && draft.place.trim() !== linkedPlaceLabel.trim(),
+  )
+  const saveDraft = () => {
+    onSave({
+      ...draft,
+      startTime: normalizeTime(draft.startTime),
+      endTime: normalizeTime(draft.endTime),
+      googlePlaceQuery: (draft.googlePlaceId ?? '').trim()
+        ? draft.googlePlaceQuery
+        : (draft.googlePlaceQuery.trim() || draft.place.trim()),
     })
   }
   const mapsQuery = getGoogleMapsQuery(draft)
@@ -630,7 +673,7 @@ function DetailPanel({
       </div>
       <form className="ai-fill-form" onSubmit={fillWithAi}>
         <label className="ai-fill-label">
-          <span>AI로 채우기</span>
+          <span>AI 입력</span>
           <div className="ai-fill-row">
             <div className="ai-fill-control">
               <Sparkles size={15} />
@@ -656,10 +699,46 @@ function DetailPanel({
           <input aria-label="종료 시간" value={draft.endTime} inputMode="numeric" pattern="[0-9]{2}:[0-9]{2}" maxLength={5} placeholder="10:00" disabled={readonly} onChange={(event) => update({ endTime: event.target.value })} />
         </div>
       </div>
-      <label className="detail-field">
-        <span className="detail-field-label">장소</span>
-        <input value={draft.place} disabled={readonly} onChange={(event) => update({ place: event.target.value })} />
-      </label>
+      <div className="detail-place-section">
+        {isGooglePlacesConfigured && (
+          <label className="detail-field">
+            <span className="detail-field-label">장소 찾기</span>
+            <GooglePlacesAutocomplete
+              key={draft.id}
+              seedQuery={getPlaceSearchSeed(draft)}
+              disabled={readonly}
+              onSelect={applyGooglePlaceSelection}
+            />
+          </label>
+        )}
+        <label className="detail-field">
+          <span className="detail-field-label">일정표 표시명</span>
+          <input
+            value={draft.place}
+            disabled={readonly}
+            placeholder="일정표에 보이는 이름"
+            onChange={(event) => updatePlaceDisplay(event.target.value)}
+          />
+        </label>
+        {showLinkedPlaceHint && (
+          <p className="place-link-hint">표시명만 바뀌었습니다. 지도는 선택한 장소로 열립니다.</p>
+        )}
+        {draft.formattedAddress && (
+          <p className="place-address-preview">{draft.formattedAddress}</p>
+        )}
+        <div className="detail-field detail-maps-field">
+          <span className="detail-field-label">지도</span>
+          <button
+            className="ghost-button maps-open-button"
+            type="button"
+            disabled={!mapsTargetUrl}
+            onClick={openGoogleMapsSearch}
+          >
+            Maps에서 열기
+            <ExternalLink size={16} />
+          </button>
+        </div>
+      </div>
       <div className="detail-field detail-category-field">
         <span className="detail-field-label">구분</span>
         <div className="category-badge-strip" role="radiogroup" aria-label="구분">
@@ -688,41 +767,15 @@ function DetailPanel({
       <label className="detail-field detail-budget-field">
         <span className="detail-field-label">예산 JPY</span>
         <span className="detail-budget-inline">
-          <input type="number" min="0" value={draft.budgetJpy} disabled={readonly} onChange={(event) => update({ budgetJpy: Number(event.target.value) })} />
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            value={draft.budgetJpy}
+            disabled={readonly}
+            onChange={(event) => update({ budgetJpy: Number(event.target.value.replace(/\D/g, '') || 0) })}
+          />
           <span className="krw-preview">≈ {formatKrw(draft.budgetJpy, exchangeRate)}</span>
-        </span>
-      </label>
-      {isGooglePlacesConfigured && (
-        <label className="detail-field">
-          <span className="detail-field-label">장소 선택</span>
-          <GooglePlacesAutocomplete disabled={readonly} onSelect={applyGooglePlaceSelection} />
-        </label>
-      )}
-      <label className="detail-field">
-        <span className="detail-field-label">지도 검색</span>
-        <span className="map-search-stack">
-          <span className="map-search-row">
-            <span className="search-control">
-              <Search size={15} />
-              <input
-                value={draft.googlePlaceQuery}
-                disabled={readonly}
-                placeholder={draft.place || 'Google Maps 검색어'}
-                onChange={(event) => update({ googlePlaceQuery: event.target.value })}
-              />
-            </span>
-            <button
-              className="icon-button"
-              type="button"
-              aria-label="Google Maps에서 검색"
-              title="Google Maps에서 검색"
-              disabled={!mapsTargetUrl}
-              onClick={openGoogleMapsSearch}
-            >
-              <ExternalLink size={16} />
-            </button>
-          </span>
-          {draft.formattedAddress && <span className="place-address-preview">{draft.formattedAddress}</span>}
         </span>
       </label>
       <div className="detail-actions">
@@ -731,7 +784,7 @@ function DetailPanel({
           삭제
         </button>
         <button className="ghost-button" onClick={onClose}>취소</button>
-        <button className="primary-button" disabled={readonly} onClick={() => onSave({ ...draft, startTime: normalizeTime(draft.startTime), endTime: normalizeTime(draft.endTime) })}>저장</button>
+        <button className="primary-button" disabled={readonly} onClick={saveDraft}>저장</button>
       </div>
     </aside>
   )
@@ -740,12 +793,21 @@ function DetailPanel({
 function GooglePlacesAutocomplete({
   disabled,
   onSelect,
+  seedQuery = '',
 }: {
   disabled: boolean
   onSelect: (selection: GooglePlaceSelection) => void
+  seedQuery?: string
 }) {
-  const containerRef = useRef<HTMLSpanElement | null>(null)
+  const shellRef = useRef<HTMLSpanElement | null>(null)
+  const sessionTokenRef = useRef<object | null>(null)
+  const requestIdRef = useRef(0)
   const onSelectRef = useRef(onSelect)
+  const [query, setQuery] = useState(seedQuery)
+  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([])
+  const [open, setOpen] = useState(false)
+  const [searching, setSearching] = useState(false)
+  const [searchError, setSearchError] = useState('')
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
 
   useEffect(() => {
@@ -754,47 +816,135 @@ function GooglePlacesAutocomplete({
 
   useEffect(() => {
     let disposed = false
-    let element: HTMLElement | null = null
 
-    const handleSelect = async (event: Event) => {
-      const selection = await readPlaceSelection(event)
-      if (selection && !disposed) onSelectRef.current(selection)
-    }
-
-    const mountAutocomplete = async () => {
+    const preparePlaces = async () => {
       try {
-        const nextElement = await createPlaceAutocompleteElement()
-        if (disposed) return
-
-        element = nextElement
-        if (disabled) {
-          element.setAttribute('disabled', '')
-          ;(element as HTMLElement & { disabled?: boolean }).disabled = true
-        }
-        element.addEventListener('gmp-select', handleSelect)
-        containerRef.current?.replaceChildren(element)
-        setStatus('ready')
+        sessionTokenRef.current = await createAutocompleteSessionToken()
+        if (!disposed) setStatus('ready')
       } catch {
         if (!disposed) setStatus('error')
       }
     }
 
-    void mountAutocomplete()
+    void preparePlaces()
 
     return () => {
       disposed = true
-      element?.removeEventListener('gmp-select', handleSelect)
-      element?.remove()
     }
-  }, [disabled])
+  }, [])
 
-  return (
-    <span className="places-autocomplete-shell">
-      <span className="places-autocomplete-slot" ref={containerRef} />
-      {status !== 'ready' && (
+  useEffect(() => {
+    if (status !== 'ready' || disabled || !query.trim()) {
+      return
+    }
+
+    const requestId = ++requestIdRef.current
+    const timer = window.setTimeout(async () => {
+      setSearching(true)
+      setSearchError('')
+      try {
+        if (!sessionTokenRef.current) {
+          sessionTokenRef.current = await createAutocompleteSessionToken()
+        }
+        const nextSuggestions = await fetchPlaceSuggestions(query, sessionTokenRef.current)
+        if (requestId !== requestIdRef.current) return
+        setSuggestions(nextSuggestions)
+        setOpen(nextSuggestions.length > 0)
+      } catch (error) {
+        if (requestId !== requestIdRef.current) return
+        setSuggestions([])
+        setSearchError(error instanceof Error ? error.message : '검색에 실패했습니다.')
+      } finally {
+        if (requestId === requestIdRef.current) setSearching(false)
+      }
+    }, 250)
+
+    return () => window.clearTimeout(timer)
+  }, [disabled, query, status])
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!shellRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => document.removeEventListener('pointerdown', handlePointerDown)
+  }, [])
+
+  const handleSelect = async (suggestion: PlaceSuggestion) => {
+    setSearching(true)
+    setSearchError('')
+    try {
+      const selection = await resolvePlaceFromPrediction(suggestion.placePrediction)
+      setQuery(selection.name || selection.address)
+      setSuggestions([])
+      setOpen(false)
+      sessionTokenRef.current = await createAutocompleteSessionToken()
+      onSelectRef.current(selection)
+    } catch (error) {
+      setSearchError(error instanceof Error ? error.message : '장소를 선택하지 못했습니다.')
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  if (status !== 'ready') {
+    return (
+      <span className="places-autocomplete-shell">
         <span className={`places-autocomplete-status ${status === 'error' ? 'error' : ''}`}>
           {status === 'error' ? 'Places 연결 실패' : 'Places 준비 중'}
         </span>
+      </span>
+    )
+  }
+
+  return (
+    <span className="places-autocomplete-shell" ref={shellRef}>
+      <span className="search-control places-autocomplete-input">
+        <Search size={15} />
+        <input
+          value={query}
+          disabled={disabled}
+          placeholder="장소 이름으로 검색"
+          aria-autocomplete="list"
+          aria-expanded={open && suggestions.length > 0}
+          onChange={(event) => {
+            const nextQuery = event.target.value
+            setQuery(nextQuery)
+            setOpen(Boolean(nextQuery.trim()))
+            if (!nextQuery.trim()) {
+              setSuggestions([])
+              setSearchError('')
+              setSearching(false)
+              requestIdRef.current += 1
+            }
+          }}
+          onFocus={() => {
+            if (suggestions.length) setOpen(true)
+          }}
+        />
+      </span>
+      {searching && <span className="places-autocomplete-status">검색 중...</span>}
+      {searchError && <span className="places-autocomplete-status error">{searchError}</span>}
+      {open && suggestions.length > 0 && (
+        <ul className="places-suggestion-list" role="listbox" aria-label="장소 검색 결과">
+          {suggestions.map((suggestion) => (
+            <li key={suggestion.key}>
+              <button
+                type="button"
+                role="option"
+                disabled={disabled || searching}
+                onClick={() => void handleSelect(suggestion)}
+              >
+                <MapPin size={14} />
+                <span className="places-suggestion-copy">
+                  <strong>{suggestion.mainText}</strong>
+                  {suggestion.secondaryText && <small>{suggestion.secondaryText}</small>}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
     </span>
   )
@@ -1496,7 +1646,7 @@ function App() {
       endTime: '10:00',
       place: '',
       category: '기타',
-      title: '새 일정',
+      title: '',
       note: '',
       budgetJpy: 0,
       googlePlaceQuery: '',

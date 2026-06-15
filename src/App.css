@@ -550,26 +550,25 @@ textarea { min-height: 56px; resize: vertical; }
 }
 .ai-fill-form {
   display: grid;
-  gap: 8px;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface-subtle);
+  gap: 6px;
 }
 .ai-fill-label {
   min-width: 0;
   display: grid;
-  gap: 6px;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
 }
 .ai-fill-label > span {
   color: var(--muted);
   font-size: 12px;
   font-weight: 800;
+  line-height: 1.2;
 }
 .ai-fill-row {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 40px;
+  grid-template-columns: minmax(0, 1fr) 38px;
   align-items: center;
   gap: 8px;
 }
@@ -588,9 +587,9 @@ textarea { min-height: 56px; resize: vertical; }
   padding-left: 32px;
 }
 .ai-fill-button {
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
+  width: 38px;
+  height: 34px;
+  min-width: 38px;
   padding: 0;
   display: inline-grid;
   place-items: center;
@@ -656,21 +655,19 @@ textarea { min-height: 56px; resize: vertical; }
   line-height: 1.2;
 }
 .places-autocomplete-shell {
+  position: relative;
+  z-index: 4;
   min-width: 0;
+  min-height: 34px;
   display: grid;
   gap: 6px;
+  overflow: visible;
 }
-.places-autocomplete-slot {
+.places-autocomplete-input {
   min-width: 0;
-  display: block;
-}
-.places-autocomplete-element,
-.places-autocomplete-slot gmp-place-autocomplete {
-  width: 100%;
-  min-height: 40px;
-  display: block;
 }
 .places-autocomplete-status {
+  padding: 0 2px;
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
@@ -678,32 +675,85 @@ textarea { min-height: 56px; resize: vertical; }
 .places-autocomplete-status.error {
   color: var(--danger);
 }
+.places-suggestion-list {
+  margin: 0;
+  padding: 4px;
+  display: grid;
+  gap: 2px;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  max-height: min(240px, 42dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.places-suggestion-list button {
+  width: 100%;
+  min-height: 44px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+.places-suggestion-list button:hover:not(:disabled),
+.places-suggestion-list button:focus-visible {
+  background: #f8fbff;
+  outline: 0;
+}
+.places-suggestion-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.places-suggestion-copy strong {
+  font-size: 13px;
+  line-height: 1.35;
+}
+.places-suggestion-copy small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.places-suggestion-list svg {
+  margin-top: 2px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
 .search-control { position: relative; display: flex; align-items: center; }
 .search-control svg { position: absolute; left: 10px; color: var(--muted); }
 .search-control input { padding-left: 32px; }
-.map-search-stack {
-  min-width: 0;
+.detail-place-section {
   display: grid;
-  gap: 6px;
-}
-.map-search-row {
-  min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 38px;
-  align-items: center;
   gap: 8px;
 }
-.map-search-row .search-control {
-  min-width: 0;
+.detail-maps-field {
+  align-items: center;
 }
-.map-search-row .icon-button {
-  width: 38px;
-  min-width: 38px;
-  padding: 0;
+.maps-open-button {
+  width: 100%;
+  justify-content: center;
 }
 .place-address-preview {
   min-width: 0;
+  margin: 0;
+  padding: 0 2px;
   color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.place-link-hint {
+  margin: -2px 0 0;
+  padding: 0 2px;
+  color: #2563eb;
   font-size: 12px;
   font-weight: 700;
   line-height: 1.35;

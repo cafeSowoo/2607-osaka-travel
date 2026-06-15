@@ -162,7 +162,7 @@ export const useTravelData = () => {
         endTime: normalizeTime(item.endTime ?? existing?.endTime ?? '10:00'),
         place: item.place ?? existing?.place ?? '',
         category: item.category ?? existing?.category ?? '기타',
-        title: item.title ?? existing?.title ?? '새 일정',
+        title: item.title ?? existing?.title ?? '',
         note: item.note ?? existing?.note ?? '',
         budgetJpy: Number(item.budgetJpy ?? existing?.budgetJpy ?? 0),
         googlePlaceQuery: item.googlePlaceQuery ?? existing?.googlePlaceQuery ?? '',
