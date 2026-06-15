@@ -339,32 +339,120 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
   color: var(--muted);
   border-left: 1px solid var(--line);
 }
-.floating-schedule-add {
+.schedule-floating-actions {
+  --fab-size: 58px;
+  --fab-gap: 12px;
   position: fixed;
   right: 28px;
   bottom: 28px;
   z-index: 18;
-  width: 58px;
-  height: 58px;
-  display: grid;
-  place-items: center;
-  border: 0;
-  border-radius: 999px;
-  background: var(--accent);
-  color: #fff;
-  box-shadow: 0 16px 34px rgba(37, 99, 235, 0.28);
+  width: var(--fab-size);
+  height: var(--fab-size);
   transition: opacity 160ms ease, transform 160ms ease, visibility 160ms ease;
 }
-.floating-schedule-add:hover:not(:disabled) { background: var(--accent-hover); }
-.floating-schedule-add:focus-visible {
-  outline: 3px solid var(--accent-line);
-  outline-offset: 3px;
-}
-.floating-schedule-add.is-hidden {
+.schedule-floating-actions.is-hidden {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
   transform: scale(0.88);
+}
+.schedule-floating-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 17;
+  border: 0;
+  padding: 0;
+  background: rgba(15, 23, 42, 0.12);
+  cursor: default;
+  animation: schedule-floating-backdrop-in 180ms ease both;
+}
+@keyframes schedule-floating-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.schedule-floating-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(var(--fab-size) + var(--fab-gap));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--fab-gap);
+  pointer-events: none;
+}
+.schedule-floating-actions.is-open .schedule-floating-menu {
+  pointer-events: auto;
+}
+.schedule-floating-option,
+.schedule-floating-main {
+  width: var(--fab-size);
+  height: var(--fab-size);
+  flex-shrink: 0;
+  border-radius: 999px;
+}
+.schedule-floating-option {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: #111827;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(calc(var(--fab-size) + var(--fab-gap))) scale(0.2);
+  transform-origin: center bottom;
+  transition:
+    opacity 180ms ease,
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 180ms ease,
+    background 160ms ease;
+}
+.schedule-floating-actions.is-open .schedule-floating-option {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+.schedule-floating-actions.is-open .schedule-floating-option:nth-child(2) { transition-delay: 45ms; }
+.schedule-floating-actions.is-open .schedule-floating-option:nth-child(1) { transition-delay: 90ms; }
+.schedule-floating-actions:not(.is-open) .schedule-floating-option:nth-child(1) { transition-delay: 0ms; }
+.schedule-floating-actions:not(.is-open) .schedule-floating-option:nth-child(2) { transition-delay: 35ms; }
+.schedule-floating-option:hover:not(:disabled) { background: #f8fafc; }
+.schedule-floating-option:focus-visible {
+  outline: 2px solid var(--accent-line);
+  outline-offset: 2px;
+}
+.brand-mark {
+  width: 34px;
+  height: 34px;
+  display: block;
+  object-fit: contain;
+  border-radius: 999px;
+}
+.chatgpt-mark {
+  width: 32px;
+  height: 32px;
+}
+.google-maps-mark {
+  width: 34px;
+  height: 34px;
+}
+.schedule-floating-main {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 16px 34px rgba(37, 99, 235, 0.28);
+  transition: background 160ms ease;
+}
+.schedule-floating-main:hover:not(:disabled) { background: var(--accent-hover); }
+.schedule-floating-main:focus-visible {
+  outline: 3px solid var(--accent-line);
+  outline-offset: 3px;
 }
 .schedule-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 0; align-items: start; }
 .schedule-main { min-width: 0; }
@@ -1059,11 +1147,10 @@ textarea { min-height: 56px; resize: vertical; }
   .schedule-title { width: 100%; justify-content: space-between; }
   .schedule-title h1 { min-width: 0; }
   .schedule-actions { justify-content: flex-start; }
-  .floating-schedule-add {
+  .schedule-floating-actions {
+    --fab-size: 54px;
     right: max(18px, env(safe-area-inset-right));
     bottom: calc(92px + env(safe-area-inset-bottom, 0px) + 16px);
-    width: 54px;
-    height: 54px;
     z-index: 19;
   }
   .account-cluster { margin-left: auto; }

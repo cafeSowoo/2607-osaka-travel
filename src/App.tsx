@@ -14,6 +14,7 @@ import {
   LogOut,
   Luggage,
   MapPin,
+  MoreHorizontal,
   PencilLine,
   Plane,
   Plus,
@@ -35,6 +36,8 @@ import type {
   TouchEvent as ReactTouchEvent,
 } from 'react'
 import './App.css'
+import chatGptActionIcon from './assets/chatgpt-action-icon.png'
+import googleMapsActionIcon from './assets/google-maps-action-icon.png'
 import { categories } from './data/seed'
 import { useTravelData } from './hooks/useTravelData'
 import {
@@ -114,6 +117,8 @@ function useMobileLayout() {
 }
 const SCHEDULE_COLUMN_STORAGE_KEY = 'osaka-travel-pwa:schedule-column-widths:v1'
 const DRAFT_ITINERARY_ID_PREFIX = 'draft-itinerary-'
+const CHATGPT_APP_URL = 'https://chatgpt.com/'
+const GOOGLE_MAPS_APP_URL = 'https://www.google.com/maps'
 
 const scheduleColumns = [
   { id: 'time', label: '시간', defaultWidth: 118, minWidth: 96, maxWidth: 180 },
@@ -308,6 +313,65 @@ function AccountStatus({ syncState, onLogout }: { syncState: SyncState; onLogout
   )
 }
 
+function ScheduleFloatingActions({
+  hidden,
+  disabled,
+  onAdd,
+}: {
+  hidden: boolean
+  disabled: boolean
+  onAdd: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const activeOpen = open && !hidden
+
+  const handlePrimaryClick = () => {
+    if (activeOpen) {
+      onAdd()
+      setOpen(false)
+      return
+    }
+    setOpen(true)
+  }
+  const openExternalApp = (url: string) => {
+    window.open(url, '_blank', 'noopener,noreferrer')
+    setOpen(false)
+  }
+
+  return (
+    <>
+      {activeOpen && (
+        <button
+          className="schedule-floating-backdrop"
+          type="button"
+          aria-label="빠른 실행 닫기"
+          onClick={() => setOpen(false)}
+        />
+      )}
+      <div className={`schedule-floating-actions ${hidden ? 'is-hidden' : ''} ${activeOpen ? 'is-open' : ''}`}>
+        <div className="schedule-floating-menu" aria-hidden={!activeOpen}>
+          <button className="schedule-floating-option" type="button" aria-label="ChatGPT" disabled={disabled} tabIndex={activeOpen ? 0 : -1} onClick={() => openExternalApp(CHATGPT_APP_URL)}>
+            <img className="brand-mark chatgpt-mark" src={chatGptActionIcon} alt="" aria-hidden="true" />
+          </button>
+          <button className="schedule-floating-option" type="button" aria-label="Google Maps" disabled={disabled} tabIndex={activeOpen ? 0 : -1} onClick={() => openExternalApp(GOOGLE_MAPS_APP_URL)}>
+            <img className="brand-mark google-maps-mark" src={googleMapsActionIcon} alt="" aria-hidden="true" />
+          </button>
+        </div>
+        <button
+          className="schedule-floating-main"
+          type="button"
+          disabled={disabled}
+          onClick={handlePrimaryClick}
+          aria-label={activeOpen ? '일정 추가' : '빠른 실행'}
+          aria-expanded={activeOpen}
+        >
+          {activeOpen ? <Plus size={26} strokeWidth={2.5} /> : <MoreHorizontal size={26} strokeWidth={2.5} />}
+        </button>
+      </div>
+    </>
+  )
+}
+
 function ScheduleView({
   days,
   items,
@@ -484,9 +548,7 @@ function ScheduleView({
         </div>
       </header>
 
-      <button className={`floating-schedule-add ${selectedItem ? 'is-hidden' : ''}`} type="button" disabled={readonly} onClick={onAdd} aria-label="일정 추가">
-        <Plus size={26} strokeWidth={2.5} />
-      </button>
+      <ScheduleFloatingActions hidden={Boolean(selectedItem)} disabled={readonly} onAdd={onAdd} />
 
       <div className="schedule-layout">
         <div className="schedule-main">
@@ -1705,8 +1767,8 @@ function App() {
       tripId: data.trip.id,
       dayIndex: activeTripDay.dayIndex,
       date: activeTripDay.date,
-      startTime: '09:00',
-      endTime: '10:00',
+      startTime: '',
+      endTime: '',
       place: '',
       category: '기타',
       title: '',
