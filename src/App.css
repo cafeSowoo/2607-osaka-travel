@@ -681,8 +681,16 @@ textarea { min-height: 56px; resize: vertical; }
   min-width: 0;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-inline: contain;
+  padding: 2px 2px 5px;
+  scrollbar-width: none;
+  touch-action: pan-x;
+}
+.detail-day-strip::-webkit-scrollbar {
+  display: none;
 }
 .detail-day-button {
   flex: 0 0 auto;
