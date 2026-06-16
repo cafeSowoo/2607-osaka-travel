@@ -1259,7 +1259,7 @@ textarea { min-height: 56px; resize: vertical; }
   .itinerary-table { border: 0; background: transparent; display: grid; gap: 10px; overflow: visible; }
   .table-row.head { display: none; }
   .table-row {
-    grid-template-columns: 46px minmax(0, 1fr);
+    grid-template-columns: 50px minmax(0, 1fr);
     justify-content: stretch;
     align-items: stretch;
     gap: 10px;
@@ -1295,7 +1295,7 @@ textarea { min-height: 56px; resize: vertical; }
   .table-row > .mobile-time-stack {
     display: flex;
     flex-direction: column;
-    align-items: flex-end;
+    align-items: center;
     justify-content: center;
     gap: 2px;
     color: #374151;
@@ -1307,6 +1307,14 @@ textarea { min-height: 56px; resize: vertical; }
     padding-right: 8px;
     color: #4b5563;
     font-weight: 900;
+  }
+  .mobile-duration {
+    margin-top: 2px;
+    color: #64748b;
+    font-size: 10px;
+    font-weight: 760;
+    line-height: 1;
+    white-space: nowrap;
   }
   .table-row > .mobile-card-content {
     position: relative;
@@ -1356,19 +1364,21 @@ textarea { min-height: 56px; resize: vertical; }
   .mobile-card-footer {
     width: 100%;
     min-width: 0;
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) max-content;
+    align-items: start;
+    column-gap: 10px;
   }
   .mobile-card-budget {
-    flex-shrink: 0;
-    margin-left: auto;
+    grid-column: 2;
+    justify-self: end;
+    margin-right: -25px;
     text-align: right;
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
     color: #4b5563;
-    font-size: 11px;
-    font-weight: 850;
+    font-size: 12px;
+    font-weight: 800;
     line-height: 1.45;
   }
   .table-row.tone-travel .mobile-card-content { --mobile-card-border: #d8e9fb; }
@@ -1390,10 +1400,12 @@ textarea { min-height: 56px; resize: vertical; }
     line-height: 1.35;
   }
   .mobile-card-title {
-    flex: 1;
+    grid-column: 1;
     min-width: 0;
+    margin-left: 38px;
     color: #4b5563;
     font-size: 12px;
+    font-weight: 800;
     line-height: 1.45;
   }
   .mobile-card-title:empty {

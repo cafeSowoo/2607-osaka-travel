@@ -190,6 +190,24 @@ const getActiveTripDay = (days: TripDay[]) => {
 }
 
 const makeTimeRange = (item: ItineraryItem) => `${item.startTime || '--:--'} ~ ${item.endTime || '--:--'}`
+const timeToMinutes = (value: string) => {
+  const text = normalizeTime(value)
+  if (!isValidTime(text)) return null
+  const [hours, minutes] = text.split(':').map(Number)
+  return hours * 60 + minutes
+}
+const formatDuration = (item: Pick<ItineraryItem, 'startTime' | 'endTime'>) => {
+  const startMinutes = timeToMinutes(item.startTime)
+  const endMinutes = timeToMinutes(item.endTime)
+  if (startMinutes === null || endMinutes === null) return ''
+  const durationMinutes = endMinutes >= startMinutes
+    ? endMinutes - startMinutes
+    : endMinutes + 24 * 60 - startMinutes
+  const hours = Math.floor(durationMinutes / 60)
+  const minutes = durationMinutes % 60
+  if (hours === 0) return `(${String(minutes).padStart(2, '0')}m)`
+  return `(${hours}h ${String(minutes).padStart(2, '0')}m)`
+}
 const formatPlace = (place: string) => place.replace(/\s*->\s*/g, ' → ')
 const formatTabDate = (day: TripDay) => {
   const [, month, date] = day.date.split('-')
@@ -650,6 +668,9 @@ function ScheduleView({
         <span>{item.startTime || '--:--'}</span>
         <span className="time-divider">~</span>
         <span>{item.endTime || '--:--'}</span>
+        {formatDuration(item) ? (
+          <span className="mobile-duration">{formatDuration(item)}</span>
+        ) : null}
       </span>
       <span className="mobile-card-content">
         <button
