@@ -15,6 +15,7 @@ export type TripDay = {
   dayIndex: number
   date: string
   label: string
+  isBackup?: boolean
 }
 
 export type ItineraryItem = {

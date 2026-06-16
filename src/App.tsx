@@ -38,7 +38,7 @@ import type {
 import './App.css'
 import chatGptActionIcon from './assets/chatgpt-action-icon.png'
 import googleMapsActionIcon from './assets/google-maps-action-icon.png'
-import { categories } from './data/seed'
+import { BACKUP_DAY_INDEX, categories } from './data/seed'
 import { useTravelData } from './hooks/useTravelData'
 import {
   createAutocompleteSessionToken,
@@ -73,6 +73,8 @@ const formatBudget = (value: number, showKrw: boolean, rate: number) => showKrw 
 const normalizeTime = (value: string) => value.trim().slice(0, 5)
 const isMobileViewport = () => window.matchMedia('(max-width: 980px)').matches
 const isAndroidDevice = () => /Android/i.test(navigator.userAgent)
+const isBackupDay = (day: TripDay) => day.isBackup || day.dayIndex === BACKUP_DAY_INDEX
+const getDayLabel = (day: TripDay) => isBackupDay(day) ? '후보' : `Day${day.dayIndex}`
 const MOBILE_LAYOUT_QUERY = '(max-width: 980px)'
 const DAY_SWIPE_THRESHOLD = 56
 const DAY_SWIPE_AXIS_LOCK = 12
@@ -185,7 +187,9 @@ const formatLocalDateKey = (date: Date) => {
 
 const getActiveTripDay = (days: TripDay[]) => {
   const today = formatLocalDateKey(new Date())
-  const sortedDays = [...days].sort((a, b) => a.date.localeCompare(b.date))
+  const sortedDays = [...days]
+    .filter((day) => !isBackupDay(day))
+    .sort((a, b) => a.date.localeCompare(b.date))
   return sortedDays.findLast((day) => day.date <= today) ?? sortedDays[0] ?? days[0]
 }
 
@@ -210,9 +214,11 @@ const formatDuration = (item: Pick<ItineraryItem, 'startTime' | 'endTime'>) => {
 }
 const formatPlace = (place: string) => place.replace(/\s*->\s*/g, ' → ')
 const formatTabDate = (day: TripDay) => {
+  if (isBackupDay(day)) return '백업 일정'
   const [, month, date] = day.date.split('-')
   return `${month}.${date} (${day.label.split(' ').at(-1) ?? ''})`
 }
+const getDayAriaLabel = (day: TripDay) => `${getDayLabel(day)} ${formatTabDate(day)}`
 const isDraftItineraryItem = (item: ItineraryItem) => item.id.startsWith(DRAFT_ITINERARY_ID_PREFIX)
 const makeGoogleMapsSearchUrl = (query: string) => (
   `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query.trim().replace(/\s+/g, ' '))}`
@@ -258,7 +264,7 @@ function AuthScreen({ login, configured }: { login: () => void; configured: bool
       <section className="auth-card">
         <div className="app-mark">旅</div>
         <h1>2607 Osaka</h1>
-        <p>항공권, 호텔, Day1~Day5 일정표를 한곳에서 관리하는 개인 여행 PWA입니다.</p>
+        <p>항공권, 호텔, Day1~Day5와 후보 일정을 한곳에서 관리하는 개인 여행 PWA입니다.</p>
         <button className="primary-button" onClick={login}>
           <LogIn size={18} />
           {configured ? 'Google로 로그인' : '데모 모드로 시작'}
@@ -414,7 +420,7 @@ function DayTabs({
           className={`day-tab-button ${candidate.dayIndex === activeDay ? 'active' : ''}`}
           onClick={() => onChange(candidate.dayIndex)}
         >
-          <span>{`Day${candidate.dayIndex}`}</span>
+          <span>{getDayLabel(candidate)}</span>
           <small>{formatTabDate(candidate)}</small>
         </button>
       ))}
@@ -710,6 +716,13 @@ function ScheduleView({
     </button>
   )
 
+  const getEmptyScheduleText = (dayIndex: number) => {
+    const day = sortedDays.find((candidate) => candidate.dayIndex === dayIndex)
+    return day && isBackupDay(day)
+      ? '후보 일정이 비어 있습니다.'
+      : '이 날짜의 일정표가 비어 있습니다.'
+  }
+
   const renderMobileDayPanel = (dayIndex: number) => {
     const panelItems = sortItineraryItems(items.filter((item) => item.dayIndex === dayIndex))
     const panelBudget = panelItems.reduce((sum, item) => sum + item.budgetJpy, 0)
@@ -718,7 +731,7 @@ function ScheduleView({
       <div key={dayIndex} className="day-itinerary-panel">
         <div className="itinerary-table mobile-itinerary-table">
           {panelItems.length ? panelItems.map(renderItineraryRow) : (
-            <EmptyState text="이 날짜의 일정표가 비어 있습니다." />
+            <EmptyState text={getEmptyScheduleText(dayIndex)} />
           )}
           <div className="table-total-row">
             <span>합계</span>
@@ -778,6 +791,7 @@ function ScheduleView({
   const detailPanelProps = {
     item: selectedItem,
     dayItems,
+    days,
     readonly,
     exchangeRate,
     onClose: () => setSelectedItem(null),
@@ -849,7 +863,7 @@ function ScheduleView({
                 </span>
               ))}
             </div>
-            {dayItems.length ? dayItems.map(renderItineraryRow) : <EmptyState text="이 날짜의 일정표가 비어 있습니다." />}
+            {dayItems.length ? dayItems.map(renderItineraryRow) : <EmptyState text={getEmptyScheduleText(activeDay)} />}
             <div className="table-total-row">
               <span>합계</span>
               <strong>{formatBudget(dayBudget, showKrw, exchangeRate)}</strong>
@@ -878,6 +892,7 @@ function isDaySwipeBlocked(target: EventTarget | null) {
 function DetailPanel({
   item,
   dayItems,
+  days,
   readonly,
   exchangeRate,
   onClose,
@@ -887,6 +902,7 @@ function DetailPanel({
 }: {
   item: ItineraryItem | null
   dayItems: ItineraryItem[]
+  days: TripDay[]
   readonly: boolean
   exchangeRate: number
   onClose: () => void
@@ -894,6 +910,10 @@ function DetailPanel({
   onDelete: (id: string) => void
   variant?: 'desktop' | 'mobile'
 }) {
+  const sortedDays = useMemo(
+    () => [...days].sort((a, b) => a.dayIndex - b.dayIndex),
+    [days],
+  )
   const [draft, setDraft] = useState<ItineraryItem | null>(item)
   const [linkedPlaceLabel, setLinkedPlaceLabel] = useState(() => (item ? inferLinkedPlaceLabel(item) : ''))
   const [aiCommand, setAiCommand] = useState('')
@@ -968,6 +988,11 @@ function DetailPanel({
   const update = (patch: Partial<ItineraryItem>) => {
     setSaveError('')
     setDraft((current) => (current ? { ...current, ...patch } : current))
+  }
+  const updateDay = (dayIndex: number) => {
+    const nextDay = sortedDays.find((day) => day.dayIndex === dayIndex)
+    if (!nextDay) return
+    update({ dayIndex: nextDay.dayIndex, date: nextDay.date })
   }
   const applyGooglePlaceSelection = (selection: GooglePlaceSelection) => {
     const query = [selection.name, selection.address].filter(Boolean).join(' ')
@@ -1080,6 +1105,25 @@ function DetailPanel({
         </label>
         {aiError && <p className="ai-fill-error">{aiError}</p>}
       </form>
+      <div className="detail-field detail-day-field">
+        <span className="detail-field-label">날짜</span>
+        <div className="detail-day-strip" role="radiogroup" aria-label="날짜">
+          {sortedDays.map((day) => (
+            <button
+              key={day.dayIndex}
+              type="button"
+              className={`detail-day-button ${draft.dayIndex === day.dayIndex ? 'selected' : ''}`}
+              role="radio"
+              aria-checked={draft.dayIndex === day.dayIndex}
+              aria-label={getDayAriaLabel(day)}
+              disabled={readonly}
+              onClick={() => updateDay(day.dayIndex)}
+            >
+              {getDayLabel(day)}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="detail-field detail-time-field">
         <span className="detail-field-label">시간</span>
         <div className="detail-time-inputs">
@@ -2098,6 +2142,9 @@ function App() {
       })
     } else {
       upsertItineraryItem(item)
+    }
+    if (item.dayIndex !== activeDay) {
+      setActiveDay(item.dayIndex)
     }
     closeScheduleDetail()
   }

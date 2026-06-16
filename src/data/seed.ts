@@ -1,6 +1,7 @@
 import type { ChecklistItem, ItineraryItem, Reservation, TravelData, Trip, TripDay } from '../types'
 
 export const categories = ['이동', '식사', '카페', '관광', '쇼핑', '휴식', '기타'] as const
+export const BACKUP_DAY_INDEX = 6
 
 export const tripDays: TripDay[] = [
   { dayIndex: 1, date: '2026-07-26', label: 'Day 1 · 7/26 일' },
@@ -8,6 +9,7 @@ export const tripDays: TripDay[] = [
   { dayIndex: 3, date: '2026-07-28', label: 'Day 3 · 7/28 화' },
   { dayIndex: 4, date: '2026-07-29', label: 'Day 4 · 7/29 수' },
   { dayIndex: 5, date: '2026-07-30', label: 'Day 5 · 7/30 목' },
+  { dayIndex: BACKUP_DAY_INDEX, date: '2026-07-31', label: '후보 · 백업 일정', isBackup: true },
 ]
 
 export const seedTrip: Trip = {

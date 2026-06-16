@@ -1,4 +1,4 @@
-import { createSeedData } from '../data/seed'
+import { createSeedData, tripDays } from '../data/seed'
 import { sortItineraryItems } from './itinerarySort'
 import type { TravelData } from '../types'
 
@@ -6,6 +6,7 @@ const STORAGE_KEY = 'osaka-travel-pwa:data:v4'
 
 const normalizeTravelData = (data: TravelData): TravelData => ({
   ...data,
+  days: tripDays.map((day) => ({ ...day })),
   itineraryItems: sortItineraryItems(data.itineraryItems.map((item) => ({
     ...item,
     googlePlaceId: item.googlePlaceId ?? '',

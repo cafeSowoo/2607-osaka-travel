@@ -243,7 +243,7 @@ export const loadSupabaseData = async (session: Session): Promise<TravelData> =>
 
   return {
     trip: fromTrip(trip.data as TripRow),
-    days: tripDays,
+    days: tripDays.map((day) => ({ ...day })),
     itineraryItems: sortItineraryItems(((itinerary.data ?? []) as ItineraryRow[]).map(fromItinerary)),
     reservations: ((reservations.data ?? []) as ReservationRow[]).map(fromReservation),
     checklistItems: ((checklist.data ?? []) as ChecklistRow[]).map(fromChecklist),
