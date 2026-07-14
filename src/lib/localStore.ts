@@ -14,6 +14,7 @@ const normalizeTravelData = (data: TravelData): TravelData => ({
     formattedAddress: item.formattedAddress ?? '',
     lat: item.lat ?? null,
     lng: item.lng ?? null,
+    confirmed: Boolean(item.confirmed),
   }))),
   checklistItems: data.checklistItems.map((item) => ({
     ...item,

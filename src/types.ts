@@ -36,6 +36,7 @@ export type ItineraryItem = {
   formattedAddress: string
   lat: number | null
   lng: number | null
+  confirmed: boolean
   sortOrder: number
 }
 

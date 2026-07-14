@@ -1,6 +1,7 @@
 import { createClient, type Session, type SupabaseClient } from '@supabase/supabase-js'
 import { categories, createSeedData, seedTrip, tripDays } from '../data/seed'
 import { sortItineraryItems } from './itinerarySort'
+import { isValidTime, normalizeTime } from './time'
 import type { Category, ChecklistItem, ItineraryAiPatch, ItineraryItem, Reservation, TravelData, Trip } from '../types'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
@@ -12,7 +13,7 @@ const isCategory = (value: unknown): value is Category => categories.includes(va
 const readString = (value: unknown) => (typeof value === 'string' ? value.trim() : undefined)
 const readTime = (value: unknown) => {
   const text = readString(value)
-  return text && /^\d{2}:\d{2}$/.test(text) ? text : undefined
+  return text && isValidTime(text) ? normalizeTime(text) : undefined
 }
 const readBudget = (value: unknown) => {
   const amount = Number(value)
@@ -59,6 +60,7 @@ type ItineraryRow = {
   formatted_address: string | null
   lat: number | string | null
   lng: number | string | null
+  confirmed: boolean | null
   sort_order: number | null
 }
 
@@ -122,6 +124,7 @@ const fromItinerary = (row: ItineraryRow): ItineraryItem => ({
   formattedAddress: row.formatted_address ?? '',
   lat: row.lat === null || row.lat === undefined ? null : Number(row.lat),
   lng: row.lng === null || row.lng === undefined ? null : Number(row.lng),
+  confirmed: row.confirmed ?? false,
   sortOrder: row.sort_order ?? 0,
 })
 
@@ -144,6 +147,7 @@ const toItinerary = (item: ItineraryItem, userId: string) => ({
   formatted_address: item.formattedAddress.trim(),
   lat: item.lat,
   lng: item.lng,
+  confirmed: item.confirmed,
   sort_order: item.sortOrder,
 })
 
@@ -218,22 +222,38 @@ export const loadSupabaseData = async (session: Session): Promise<TravelData> =>
   if (!supabase) return createSeedData()
   const userId = session.user.id
 
-  const { data: existingTrips, error: tripLookupError } = await supabase.from(TABLES.trips).select('*').eq('id', seedTrip.id).limit(1)
+  const { data: existingTrips, error: tripLookupError } = await supabase
+    .from(TABLES.trips)
+    .select('id')
+    .eq('user_id', userId)
+    .eq('id', seedTrip.id)
+    .limit(1)
   if (tripLookupError) throw tripLookupError
 
   if (!existingTrips?.length) {
     const seed = createSeedData()
-    await supabase.from(TABLES.trips).upsert(toTrip(seed.trip, userId))
-    await supabase.from(TABLES.itineraryItems).upsert(seed.itineraryItems.map((item) => toItinerary(item, userId)))
-    await supabase.from(TABLES.reservations).upsert(seed.reservations.map((reservation) => toReservation(reservation, userId)))
-    await supabase.from(TABLES.checklistItems).upsert(seed.checklistItems.map((item) => toChecklist(item, userId)))
+    const { error: seedTripError } = await supabase.from(TABLES.trips).upsert(toTrip(seed.trip, userId))
+    if (seedTripError) throw seedTripError
+
+    if (seed.itineraryItems.length) {
+      const { error } = await supabase.from(TABLES.itineraryItems).upsert(seed.itineraryItems.map((item) => toItinerary(item, userId)))
+      if (error) throw error
+    }
+    if (seed.reservations.length) {
+      const { error } = await supabase.from(TABLES.reservations).upsert(seed.reservations.map((reservation) => toReservation(reservation, userId)))
+      if (error) throw error
+    }
+    if (seed.checklistItems.length) {
+      const { error } = await supabase.from(TABLES.checklistItems).upsert(seed.checklistItems.map((item) => toChecklist(item, userId)))
+      if (error) throw error
+    }
   }
 
   const [trip, itinerary, reservations, checklist] = await Promise.all([
-    supabase.from(TABLES.trips).select('*').eq('id', seedTrip.id).single(),
-    supabase.from(TABLES.itineraryItems).select('*').eq('trip_id', seedTrip.id).order('day_index').order('start_time').order('end_time').order('sort_order'),
-    supabase.from(TABLES.reservations).select('*').eq('trip_id', seedTrip.id).order('sort_order'),
-    supabase.from(TABLES.checklistItems).select('*').eq('trip_id', seedTrip.id).order('sort_order'),
+    supabase.from(TABLES.trips).select('*').eq('user_id', userId).eq('id', seedTrip.id).single(),
+    supabase.from(TABLES.itineraryItems).select('*').eq('user_id', userId).eq('trip_id', seedTrip.id).order('day_index').order('start_time').order('end_time').order('sort_order'),
+    supabase.from(TABLES.reservations).select('*').eq('user_id', userId).eq('trip_id', seedTrip.id).order('sort_order'),
+    supabase.from(TABLES.checklistItems).select('*').eq('user_id', userId).eq('trip_id', seedTrip.id).order('sort_order'),
   ])
 
   if (trip.error) throw trip.error
@@ -262,9 +282,9 @@ export const saveItineraryItem = async (item: ItineraryItem, session: Session) =
   if (error) throw error
 }
 
-export const deleteItineraryItem = async (id: string) => {
+export const deleteItineraryItem = async (id: string, session: Session) => {
   if (!supabase) return
-  const { error } = await supabase.from(TABLES.itineraryItems).delete().eq('id', id)
+  const { error } = await supabase.from(TABLES.itineraryItems).delete().eq('user_id', session.user.id).eq('id', id)
   if (error) throw error
 }
 
@@ -274,9 +294,9 @@ export const saveChecklistItem = async (item: ChecklistItem, session: Session) =
   if (error) throw error
 }
 
-export const deleteChecklistItem = async (id: string) => {
+export const deleteChecklistItem = async (id: string, session: Session) => {
   if (!supabase) return
-  const { error } = await supabase.from(TABLES.checklistItems).delete().eq('id', id)
+  const { error } = await supabase.from(TABLES.checklistItems).delete().eq('user_id', session.user.id).eq('id', id)
   if (error) throw error
 }
 

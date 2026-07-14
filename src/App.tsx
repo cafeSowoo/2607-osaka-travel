@@ -1,6 +1,7 @@
 import {
   ArrowUpRight,
   CalendarDays,
+  Check,
   CheckCircle2,
   ChevronRight,
   Circle,
@@ -50,6 +51,7 @@ import {
 } from './lib/googleMaps'
 import { sortItineraryItems } from './lib/itinerarySort'
 import { fillItineraryWithAi } from './lib/supabase'
+import { formatTimeInput, isValidTime, normalizeTime, parseTimeToMinutes } from './lib/time'
 import type { Category, ChecklistItem, ChecklistItemKind, ItineraryItem, Reservation, SyncState, TripDay } from './types'
 
 type View = 'schedule' | 'reservations' | 'checklist' | 'settings'
@@ -70,7 +72,6 @@ const getViewFromHash = (): View => {
 const formatJpy = (value: number) => `¥${value.toLocaleString('ja-JP')}`
 const formatKrw = (value: number, rate: number) => `₩${Math.round(value * rate).toLocaleString('ko-KR')}`
 const formatBudget = (value: number, showKrw: boolean, rate: number) => showKrw ? formatKrw(value, rate) : formatJpy(value)
-const normalizeTime = (value: string) => value.trim().slice(0, 5)
 const isMobileViewport = () => window.matchMedia('(max-width: 980px)').matches
 const isAndroidDevice = () => /Android/i.test(navigator.userAgent)
 const isBackupDay = (day: TripDay) => day.isBackup || day.dayIndex === BACKUP_DAY_INDEX
@@ -84,13 +85,6 @@ const clampDayDrag = (offset: number, activeIndex: number, dayCount: number) => 
   if (activeIndex <= 0 && offset > 0) return offset * DAY_SWIPE_RUBBER_BAND
   if (activeIndex >= dayCount - 1 && offset < 0) return offset * DAY_SWIPE_RUBBER_BAND
   return offset
-}
-
-const isValidTime = (value: string) => {
-  const text = normalizeTime(value)
-  if (!/^\d{2}:\d{2}$/.test(text)) return false
-  const [hours, minutes] = text.split(':').map(Number)
-  return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59
 }
 
 type ItineraryDraftValidation =
@@ -194,15 +188,9 @@ const getActiveTripDay = (days: TripDay[]) => {
 }
 
 const makeTimeRange = (item: ItineraryItem) => `${item.startTime || '--:--'} ~ ${item.endTime || '--:--'}`
-const timeToMinutes = (value: string) => {
-  const text = normalizeTime(value)
-  if (!isValidTime(text)) return null
-  const [hours, minutes] = text.split(':').map(Number)
-  return hours * 60 + minutes
-}
 const formatDuration = (item: Pick<ItineraryItem, 'startTime' | 'endTime'>) => {
-  const startMinutes = timeToMinutes(item.startTime)
-  const endMinutes = timeToMinutes(item.endTime)
+  const startMinutes = parseTimeToMinutes(item.startTime)
+  const endMinutes = parseTimeToMinutes(item.endTime)
   if (startMinutes === null || endMinutes === null) return ''
   const durationMinutes = endMinutes >= startMinutes
     ? endMinutes - startMinutes
@@ -509,6 +497,7 @@ function ScheduleView({
   onAdd,
   onSave,
   onDelete,
+  onToggleConfirmed,
   syncState,
 }: {
   days: TripDay[]
@@ -524,6 +513,7 @@ function ScheduleView({
   onAdd: () => void
   onSave: (item: ItineraryItem) => void
   onDelete: (id: string) => void
+  onToggleConfirmed: (id: string, confirmed: boolean) => void
   syncState: SyncState
 }) {
   const dayItems = useMemo(
@@ -665,10 +655,18 @@ function ScheduleView({
   }
 
   const renderItineraryRow = (item: ItineraryItem) => (
-    <button
+    <div
       key={item.id}
       className={`table-row ${categoryToneClasses[item.category]} ${selectedItem?.id === item.id ? 'selected' : ''}`}
+      role="button"
+      tabIndex={0}
       onClick={() => setSelectedItem(item)}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        event.preventDefault()
+        setSelectedItem(item)
+      }}
     >
       <span className="mobile-time-stack">
         <span>{item.startTime || '--:--'}</span>
@@ -679,6 +677,21 @@ function ScheduleView({
         ) : null}
       </span>
       <span className="mobile-card-content">
+        <button
+          type="button"
+          className={`mobile-card-confirm-button ${item.confirmed ? 'active' : ''}`}
+          aria-label={item.confirmed ? '일정 확정 해제' : '일정 확정'}
+          aria-pressed={item.confirmed}
+          title={item.confirmed ? '확정 해제' : '일정 확정'}
+          disabled={readonly}
+          onClick={(event) => {
+            event.stopPropagation()
+            onToggleConfirmed(item.id, !item.confirmed)
+          }}
+        >
+          <Check size={13} strokeWidth={2.5} aria-hidden="true" />
+          <span>확정</span>
+        </button>
         <button
           type="button"
           className="icon-button maps-open-button mobile-card-maps-button"
@@ -713,7 +726,7 @@ function ScheduleView({
       <span className="schedule-title-cell">{item.title}</span>
       <span className="schedule-note">{item.note || '-'}</span>
       <span className="schedule-budget">{formatBudget(item.budgetJpy, showKrw, exchangeRate)}</span>
-    </button>
+    </div>
   )
 
   const getEmptyScheduleText = (dayIndex: number) => {
@@ -885,7 +898,7 @@ function isDetailPanelDragBlocked(target: EventTarget | null) {
 
 function isDaySwipeBlocked(target: EventTarget | null) {
   return target instanceof Element && Boolean(
-    target.closest('.day-tabs, .schedule-floating-actions, .mobile-detail-overlay, .detail-panel, .mobile-card-maps-button, input, textarea, select, .column-resizer, .places-suggestion-list'),
+    target.closest('.day-tabs, .schedule-floating-actions, .mobile-detail-overlay, .detail-panel, .mobile-card-maps-button, .mobile-card-confirm-button, input, textarea, select, .column-resizer, .places-suggestion-list'),
   )
 }
 
@@ -1127,9 +1140,9 @@ function DetailPanel({
       <div className="detail-field detail-time-field">
         <span className="detail-field-label">시간</span>
         <div className="detail-time-inputs">
-          <input aria-label="시작 시간" value={draft.startTime} inputMode="numeric" pattern="[0-9]{2}:[0-9]{2}" maxLength={5} placeholder="09:00" disabled={readonly} onChange={(event) => update({ startTime: event.target.value })} />
+          <input aria-label="시작 시간" value={draft.startTime} inputMode="numeric" pattern="[0-9]{2}:[0-9]{2}" maxLength={5} placeholder="09:00" disabled={readonly} onChange={(event) => update({ startTime: formatTimeInput(event.target.value, draft.startTime) })} />
           <span className="detail-time-separator">~</span>
-          <input aria-label="종료 시간" value={draft.endTime} inputMode="numeric" pattern="[0-9]{2}:[0-9]{2}" maxLength={5} placeholder="10:00" disabled={readonly} onChange={(event) => update({ endTime: event.target.value })} />
+          <input aria-label="종료 시간" value={draft.endTime} inputMode="numeric" pattern="[0-9]{2}:[0-9]{2}" maxLength={5} placeholder="10:00" disabled={readonly} onChange={(event) => update({ endTime: formatTimeInput(event.target.value, draft.endTime) })} />
         </div>
       </div>
       <div className="detail-place-section">
@@ -2004,6 +2017,7 @@ function App() {
     updateTrip,
     upsertItineraryItem,
     deleteItineraryItem,
+    setItineraryItemConfirmed,
     toggleChecklistItem,
     addChecklistItem,
     updateChecklistItem,
@@ -2114,6 +2128,7 @@ function App() {
       formattedAddress: '',
       lat: null,
       lng: null,
+      confirmed: false,
       sortOrder: dayItems.length * 10 + 10,
     })
   }
@@ -2213,6 +2228,7 @@ function App() {
             onAdd={addItem}
             onSave={saveItem}
             onDelete={deleteItem}
+            onToggleConfirmed={setItineraryItemConfirmed}
             syncState={syncState}
           />
         )}

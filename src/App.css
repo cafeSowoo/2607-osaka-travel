@@ -524,6 +524,13 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
   color: var(--text);
   font-size: 13px;
 }
+.table-row[role="button"] { cursor: pointer; }
+.table-row[role="button"]:focus-visible {
+  position: relative;
+  z-index: 2;
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
 .table-row > span {
   position: relative;
   min-height: inherit;
@@ -1404,7 +1411,7 @@ textarea { min-height: 56px; resize: vertical; }
     grid-template-rows: auto auto;
     align-content: start;
     gap: 2px;
-    padding: 8px 36px 8px 10px;
+    padding: 8px 96px 8px 10px;
     border: 1px solid currentColor;
     border-radius: 7px;
     background: var(--mobile-card-bg, var(--surface));
@@ -1432,6 +1439,40 @@ textarea { min-height: 56px; resize: vertical; }
     background: rgba(255, 255, 255, 0.72);
     color: #64748b;
     box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.28);
+  }
+  .mobile-card-confirm-button {
+    position: absolute;
+    top: 7px;
+    right: 40px;
+    min-width: 48px;
+    min-height: 26px;
+    height: 26px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 0 8px;
+    border: 1px solid rgba(148, 163, 184, 0.45);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.78);
+    color: #64748b;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+  }
+  .mobile-card-confirm-button.active {
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .mobile-card-confirm-button:not(:disabled):hover,
+  .mobile-card-confirm-button:not(:disabled):focus-visible {
+    border-color: var(--accent-line);
+    color: var(--accent);
+  }
+  .mobile-card-confirm-button:not(:disabled):active {
+    transform: translateY(1px);
   }
   .mobile-card-maps-button:not(:disabled):active {
     background: var(--accent-soft);

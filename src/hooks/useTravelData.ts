@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { readLocalData, writeLocalData } from '../lib/localStore'
 import { sortItineraryItems } from '../lib/itinerarySort'
+import { normalizeTime } from '../lib/time'
 import {
   deleteItineraryItem as deleteRemoteItineraryItem,
   deleteChecklistItem as deleteRemoteChecklistItem,
@@ -18,8 +19,6 @@ import {
 import type { ChecklistItem, ChecklistItemKind, ItineraryItem, SyncState, TravelData, Trip } from '../types'
 
 const uuid = () => crypto.randomUUID()
-const normalizeTime = (value: string) => value.trim().slice(0, 5)
-
 const mergeTasksWithDividers = (sectionItems: ChecklistItem[], reorderedTasks: ChecklistItem[]) => {
   const queue = [...reorderedTasks]
   return sectionItems.map((item) => (item.kind === 'divider' ? item : queue.shift()!))
@@ -171,6 +170,7 @@ export const useTravelData = () => {
         formattedAddress: item.formattedAddress ?? existing?.formattedAddress ?? '',
         lat: item.lat ?? existing?.lat ?? null,
         lng: item.lng ?? existing?.lng ?? null,
+        confirmed: item.confirmed ?? existing?.confirmed ?? false,
         sortOrder: item.sortOrder ?? existing?.sortOrder ?? dayItems.length * 10 + 10,
       }
       const nextItems = existing
@@ -186,7 +186,22 @@ export const useTravelData = () => {
   const deleteItineraryItem = useCallback(
     (id: string) => {
       const next = { ...data, itineraryItems: data.itineraryItems.filter((item) => item.id !== id) }
-      persist(next, session ? () => deleteRemoteItineraryItem(id) : undefined)
+      persist(next, session ? () => deleteRemoteItineraryItem(id, session) : undefined)
+    },
+    [data, persist, session],
+  )
+
+  const setItineraryItemConfirmed = useCallback(
+    (id: string, confirmed: boolean) => {
+      const item = data.itineraryItems.find((candidate) => candidate.id === id)
+      if (!item || item.confirmed === confirmed) return
+
+      const nextItem = { ...item, confirmed }
+      const next = {
+        ...data,
+        itineraryItems: data.itineraryItems.map((candidate) => (candidate.id === id ? nextItem : candidate)),
+      }
+      persist(next, session ? () => saveItineraryItem(nextItem, session) : undefined)
     },
     [data, persist, session],
   )
@@ -278,7 +293,7 @@ export const useTravelData = () => {
         ...data,
         checklistItems: data.checklistItems.filter((candidate) => candidate.id !== id),
       }
-      persist(next, session ? () => deleteRemoteChecklistItem(id) : undefined)
+      persist(next, session ? () => deleteRemoteChecklistItem(id, session) : undefined)
     },
     [data, persist, session],
   )
@@ -320,6 +335,7 @@ export const useTravelData = () => {
     refresh,
     updateTrip,
     upsertItineraryItem,
+    setItineraryItemConfirmed,
     deleteItineraryItem,
     toggleChecklistItem,
     addChecklistItem,
