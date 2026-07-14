@@ -1411,7 +1411,7 @@ textarea { min-height: 56px; resize: vertical; }
     grid-template-rows: auto auto;
     align-content: start;
     gap: 2px;
-    padding: 8px 96px 8px 10px;
+    padding: 8px 36px 8px 10px;
     border: 1px solid currentColor;
     border-radius: 7px;
     background: var(--mobile-card-bg, var(--surface));
@@ -1441,12 +1441,12 @@ textarea { min-height: 56px; resize: vertical; }
     box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.28);
   }
   .mobile-card-confirm-button {
-    position: absolute;
-    top: 7px;
-    right: 40px;
+    position: static;
+    grid-column: 3;
+    justify-self: end;
     min-width: 48px;
-    min-height: 26px;
-    height: 26px;
+    min-height: 24px;
+    height: 24px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1483,14 +1483,14 @@ textarea { min-height: 56px; resize: vertical; }
     width: 100%;
     min-width: 0;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) max-content;
-    align-items: start;
+    grid-template-columns: minmax(0, 1fr) max-content max-content;
+    align-items: center;
     column-gap: 10px;
   }
   .mobile-card-budget {
     grid-column: 2;
     justify-self: end;
-    margin-right: -25px;
+    margin-right: 0;
     text-align: right;
     white-space: nowrap;
     font-variant-numeric: tabular-nums;

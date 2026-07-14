@@ -679,21 +679,6 @@ function ScheduleView({
       <span className="mobile-card-content">
         <button
           type="button"
-          className={`mobile-card-confirm-button ${item.confirmed ? 'active' : ''}`}
-          aria-label={item.confirmed ? '일정 확정 해제' : '일정 확정'}
-          aria-pressed={item.confirmed}
-          title={item.confirmed ? '확정 해제' : '일정 확정'}
-          disabled={readonly}
-          onClick={(event) => {
-            event.stopPropagation()
-            onToggleConfirmed(item.id, !item.confirmed)
-          }}
-        >
-          <Check size={13} strokeWidth={2.5} aria-hidden="true" />
-          <span>확정</span>
-        </button>
-        <button
-          type="button"
           className="icon-button maps-open-button mobile-card-maps-button"
           aria-label="Maps에서 열기"
           title="Maps에서 열기"
@@ -711,14 +696,27 @@ function ScheduleView({
           <CategoryBadge category={item.category} />
           <span className="mobile-card-place">{formatPlace(item.place || '장소 미정')}</span>
         </span>
-        {(item.title || item.budgetJpy > 0) ? (
-          <span className="mobile-card-footer">
-            <span className="mobile-card-title">{item.title}</span>
-            {item.budgetJpy > 0 ? (
-              <span className="mobile-card-budget">{formatJpy(item.budgetJpy)}</span>
-            ) : null}
-          </span>
-        ) : null}
+        <span className="mobile-card-footer">
+          <span className="mobile-card-title">{item.title}</span>
+          {item.budgetJpy > 0 ? (
+            <span className="mobile-card-budget">{formatJpy(item.budgetJpy)}</span>
+          ) : null}
+          <button
+            type="button"
+            className={`mobile-card-confirm-button ${item.confirmed ? 'active' : ''}`}
+            aria-label={item.confirmed ? '일정 확정 해제' : '일정 확정'}
+            aria-pressed={item.confirmed}
+            title={item.confirmed ? '확정 해제' : '일정 확정'}
+            disabled={readonly}
+            onClick={(event) => {
+              event.stopPropagation()
+              onToggleConfirmed(item.id, !item.confirmed)
+            }}
+          >
+            <Check size={13} strokeWidth={2.5} aria-hidden="true" />
+            <span>확정</span>
+          </button>
+        </span>
       </span>
       <span className="schedule-time">{makeTimeRange(item)}</span>
       <span className="schedule-place">{formatPlace(item.place || '장소 미정')}</span>
