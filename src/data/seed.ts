@@ -70,4 +70,5 @@ export const createSeedData = (): TravelData => ({
   itineraryItems: seedItineraryItems.map((item) => ({ ...item })),
   reservations: seedReservations.map((reservation) => ({ ...reservation, details: [...reservation.details], meta: { ...reservation.meta } })),
   checklistItems: seedChecklist.map((item) => ({ ...item })),
+  memos: [],
 })

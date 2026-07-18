@@ -20,6 +20,7 @@ const normalizeTravelData = (data: TravelData): TravelData => ({
     ...item,
     kind: item.kind ?? 'task',
   })),
+  memos: (data.memos ?? []).map((memo) => ({ ...memo })),
 })
 
 export const readLocalData = (): TravelData => {

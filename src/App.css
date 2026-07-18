@@ -1135,11 +1135,12 @@ textarea { min-height: 56px; resize: vertical; }
   font-weight: 700;
 }
 .check-actions {
-  position: relative;
   width: 34px;
   height: 34px;
+  display: inline-grid;
+  place-items: center;
 }
-.check-action-trigger {
+.check-delete {
   width: 34px;
   height: 34px;
   display: inline-grid;
@@ -1150,51 +1151,11 @@ textarea { min-height: 56px; resize: vertical; }
   background: transparent;
   color: var(--muted);
 }
-.check-action-trigger:hover:not(:disabled),
-.check-action-trigger[aria-expanded='true'] {
+.check-delete:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.72);
-  color: var(--accent);
-}
-.check-action-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  z-index: 12;
-  min-width: 112px;
-  display: grid;
-  gap: 2px;
-  padding: 5px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
-}
-.check-action-menu button {
-  min-height: 34px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 700;
-  text-align: left;
-  white-space: nowrap;
-}
-.check-action-menu button:hover {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-.check-action-menu button.danger {
-  color: var(--danger);
-}
-.check-action-menu button.danger:hover {
-  background: rgba(220, 38, 38, 0.08);
   color: #b91c1c;
 }
+.completed-task-delete { color: var(--danger); }
 .check-list.is-sorting .check-item {
   transition: transform 140ms cubic-bezier(0.2, 0, 0, 1);
 }
@@ -1257,6 +1218,122 @@ textarea { min-height: 56px; resize: vertical; }
 }
 .drag-handle:active { cursor: grabbing; }
 .drag-handle:hover:not(:disabled) { color: var(--accent); }
+.memo-screen {
+  display: grid;
+  grid-template-columns: minmax(230px, 300px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.memo-list-panel,
+.memo-editor-panel {
+  min-height: 520px;
+}
+.memo-list {
+  display: grid;
+  gap: 8px;
+}
+.memo-list > button {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  text-align: left;
+}
+.memo-list > button:hover,
+.memo-list > button.active {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+.memo-list > button strong,
+.memo-list > button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.memo-list > button span,
+.memo-list > button time,
+.memo-list-empty {
+  color: var(--muted);
+  font-size: 12px;
+}
+.memo-list > button time {
+  margin-top: 2px;
+}
+.memo-list-empty {
+  padding: 26px 12px;
+  line-height: 1.6;
+  text-align: center;
+}
+.memo-editor-panel {
+  display: grid;
+  grid-template-rows: auto minmax(360px, 1fr) auto;
+  gap: 14px;
+}
+.memo-title-input {
+  min-height: 46px;
+  padding: 8px 2px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  font-size: 22px;
+  font-weight: 800;
+}
+.memo-title-input:focus {
+  border-color: var(--accent-line);
+  outline: 0;
+}
+.memo-content-input {
+  min-height: 360px;
+  padding: 4px 2px;
+  border: 0;
+  background: transparent;
+  font-size: 15px;
+  line-height: 1.75;
+  resize: vertical;
+}
+.memo-content-input:focus { outline: 0; }
+.memo-editor-footer,
+.memo-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.memo-editor-footer {
+  justify-content: space-between;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.memo-editor-footer > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.memo-editor-actions { justify-content: flex-end; }
+.memo-editor-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.memo-editor-empty {
+  grid-row: 1 / -1;
+  min-height: 420px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+.memo-editor-empty strong {
+  color: var(--text);
+  font-size: 17px;
+}
+.memo-editor-empty .primary-button { margin-top: 6px; }
 .toggle-row { display: flex; align-items: center; justify-content: space-between; min-height: 44px; border-bottom: 1px solid var(--line); }
 .toggle-row input { width: auto; }
 .settings-budget-row {
@@ -1316,7 +1393,7 @@ textarea { min-height: 56px; resize: vertical; }
   .workspace::-webkit-scrollbar { display: none; }
   .topbar { display: grid; }
   .topbar-actions { justify-content: flex-start; }
-  .today-grid, .view-grid, .schedule-layout, .checklist-board, .settings-grid { grid-template-columns: 1fr; }
+  .today-grid, .view-grid, .schedule-layout, .checklist-board, .settings-grid, .memo-screen { grid-template-columns: 1fr; }
   .schedule-screen {
     gap: 0;
     --fab-size: 54px;
@@ -1661,7 +1738,7 @@ textarea { min-height: 56px; resize: vertical; }
     bottom: 0;
     z-index: 20;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 0;
     padding: 8px max(10px, env(safe-area-inset-left)) max(8px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-right));
     border-top: 1px solid var(--line);
@@ -1672,4 +1749,30 @@ textarea { min-height: 56px; resize: vertical; }
   }
   .mobile-tabs button { min-height: 52px; display: grid; place-items: center; border-radius: 8px; font-size: 11px; }
   .mobile-tabs button.active { background: #f0efeb; color: var(--text); }
+  .memo-list-panel,
+  .memo-editor-panel {
+    min-height: auto;
+  }
+  .memo-list-panel { padding: 14px; }
+  .memo-list {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+  .memo-list::-webkit-scrollbar { display: none; }
+  .memo-list > button {
+    flex: 0 0 210px;
+  }
+  .memo-list-empty {
+    width: 100%;
+  }
+  .memo-editor-panel {
+    grid-template-rows: auto minmax(300px, 1fr) auto;
+  }
+  .memo-content-input { min-height: 300px; }
+  .memo-editor-footer {
+    align-items: flex-end;
+  }
 }

@@ -70,12 +70,22 @@ export type ChecklistItem = {
   sortOrder: number
 }
 
+export type Memo = {
+  id: string
+  tripId: string
+  title: string
+  content: string
+  createdAt: string
+  updatedAt: string
+}
+
 export type TravelData = {
   trip: Trip
   days: TripDay[]
   itineraryItems: ItineraryItem[]
   reservations: Reservation[]
   checklistItems: ChecklistItem[]
+  memos: Memo[]
 }
 
 export type SyncState = {

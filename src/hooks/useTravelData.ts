@@ -4,6 +4,7 @@ import { readLocalData, writeLocalData } from '../lib/localStore'
 import { sortItineraryItems } from '../lib/itinerarySort'
 import { normalizeTime } from '../lib/time'
 import {
+  deleteMemo as deleteRemoteMemo,
   deleteItineraryItem as deleteRemoteItineraryItem,
   deleteChecklistItem as deleteRemoteChecklistItem,
   getSession,
@@ -11,12 +12,13 @@ import {
   loadSupabaseData,
   saveChecklistItem,
   saveItineraryItem,
+  saveMemo,
   saveTrip,
   signInWithGoogle,
   signOut,
   supabase,
 } from '../lib/supabase'
-import type { ChecklistItem, ChecklistItemKind, ItineraryItem, SyncState, TravelData, Trip } from '../types'
+import type { ChecklistItem, ChecklistItemKind, ItineraryItem, Memo, SyncState, TravelData, Trip } from '../types'
 
 const uuid = () => crypto.randomUUID()
 const mergeTasksWithDividers = (sectionItems: ChecklistItem[], reorderedTasks: ChecklistItem[]) => {
@@ -327,6 +329,42 @@ export const useTravelData = () => {
     [data, persist, session],
   )
 
+  const upsertMemo = useCallback(
+    (memo: Pick<Memo, 'title' | 'content'> & Partial<Pick<Memo, 'id' | 'createdAt'>>) => {
+      const existing = memo.id ? data.memos.find((candidate) => candidate.id === memo.id) : undefined
+      const now = new Date().toISOString()
+      const nextMemo: Memo = {
+        id: memo.id ?? uuid(),
+        tripId: data.trip.id,
+        title: memo.title.trim(),
+        content: memo.content,
+        createdAt: memo.createdAt ?? existing?.createdAt ?? now,
+        updatedAt: now,
+      }
+      const nextMemos = existing
+        ? data.memos.map((candidate) => candidate.id === nextMemo.id ? nextMemo : candidate)
+        : [nextMemo, ...data.memos]
+      const next = {
+        ...data,
+        memos: nextMemos.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+      }
+      persist(next, session ? () => saveMemo(nextMemo, session) : undefined)
+      return nextMemo
+    },
+    [data, persist, session],
+  )
+
+  const deleteMemo = useCallback(
+    (id: string) => {
+      const next = {
+        ...data,
+        memos: data.memos.filter((memo) => memo.id !== id),
+      }
+      persist(next, session ? () => deleteRemoteMemo(id, session) : undefined)
+    },
+    [data, persist, session],
+  )
+
   return {
     data,
     syncState,
@@ -342,5 +380,7 @@ export const useTravelData = () => {
     updateChecklistItem,
     deleteChecklistItem,
     reorderChecklistItems,
+    upsertMemo,
+    deleteMemo,
   }
 }

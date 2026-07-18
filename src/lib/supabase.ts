@@ -2,7 +2,7 @@ import { createClient, type Session, type SupabaseClient } from '@supabase/supab
 import { categories, createSeedData, seedTrip, tripDays } from '../data/seed'
 import { sortItineraryItems } from './itinerarySort'
 import { isValidTime, normalizeTime } from './time'
-import type { Category, ChecklistItem, ItineraryAiPatch, ItineraryItem, Reservation, TravelData, Trip } from '../types'
+import type { Category, ChecklistItem, ItineraryAiPatch, ItineraryItem, Memo, Reservation, TravelData, Trip } from '../types'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
@@ -25,6 +25,7 @@ const TABLES = {
   itineraryItems: 'osaka_itinerary_items',
   reservations: 'osaka_reservations',
   checklistItems: 'osaka_checklist_items',
+  memos: 'osaka_memos',
 } as const
 
 export const supabase: SupabaseClient | null = isSupabaseConfigured
@@ -85,6 +86,15 @@ type ChecklistRow = {
   title: string
   done: boolean
   sort_order: number | null
+}
+
+type MemoRow = {
+  id: string
+  trip_id: string
+  title: string | null
+  content: string | null
+  created_at: string
+  updated_at: string
 }
 
 const fromTrip = (row: TripRow): Trip => ({
@@ -199,6 +209,25 @@ const toChecklist = (item: ChecklistItem, userId: string) => ({
   sort_order: item.sortOrder,
 })
 
+const fromMemo = (row: MemoRow): Memo => ({
+  id: row.id,
+  tripId: row.trip_id,
+  title: row.title ?? '',
+  content: row.content ?? '',
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+})
+
+const toMemo = (memo: Memo, userId: string) => ({
+  id: memo.id,
+  user_id: userId,
+  trip_id: memo.tripId,
+  title: memo.title.trim(),
+  content: memo.content,
+  created_at: memo.createdAt,
+  updated_at: memo.updatedAt,
+})
+
 export const getSession = async (): Promise<Session | null> => {
   if (!supabase) return null
   const { data } = await supabase.auth.getSession()
@@ -249,17 +278,19 @@ export const loadSupabaseData = async (session: Session): Promise<TravelData> =>
     }
   }
 
-  const [trip, itinerary, reservations, checklist] = await Promise.all([
+  const [trip, itinerary, reservations, checklist, memos] = await Promise.all([
     supabase.from(TABLES.trips).select('*').eq('user_id', userId).eq('id', seedTrip.id).single(),
     supabase.from(TABLES.itineraryItems).select('*').eq('user_id', userId).eq('trip_id', seedTrip.id).order('day_index').order('start_time').order('end_time').order('sort_order'),
     supabase.from(TABLES.reservations).select('*').eq('user_id', userId).eq('trip_id', seedTrip.id).order('sort_order'),
     supabase.from(TABLES.checklistItems).select('*').eq('user_id', userId).eq('trip_id', seedTrip.id).order('sort_order'),
+    supabase.from(TABLES.memos).select('*').eq('user_id', userId).eq('trip_id', seedTrip.id).order('updated_at', { ascending: false }),
   ])
 
   if (trip.error) throw trip.error
   if (itinerary.error) throw itinerary.error
   if (reservations.error) throw reservations.error
   if (checklist.error) throw checklist.error
+  if (memos.error) throw memos.error
 
   return {
     trip: fromTrip(trip.data as TripRow),
@@ -267,6 +298,7 @@ export const loadSupabaseData = async (session: Session): Promise<TravelData> =>
     itineraryItems: sortItineraryItems(((itinerary.data ?? []) as ItineraryRow[]).map(fromItinerary)),
     reservations: ((reservations.data ?? []) as ReservationRow[]).map(fromReservation),
     checklistItems: ((checklist.data ?? []) as ChecklistRow[]).map(fromChecklist),
+    memos: ((memos.data ?? []) as MemoRow[]).map(fromMemo),
   }
 }
 
@@ -297,6 +329,18 @@ export const saveChecklistItem = async (item: ChecklistItem, session: Session) =
 export const deleteChecklistItem = async (id: string, session: Session) => {
   if (!supabase) return
   const { error } = await supabase.from(TABLES.checklistItems).delete().eq('user_id', session.user.id).eq('id', id)
+  if (error) throw error
+}
+
+export const saveMemo = async (memo: Memo, session: Session) => {
+  if (!supabase) return
+  const { error } = await supabase.from(TABLES.memos).upsert(toMemo(memo, session.user.id))
+  if (error) throw error
+}
+
+export const deleteMemo = async (id: string, session: Session) => {
+  if (!supabase) return
+  const { error } = await supabase.from(TABLES.memos).delete().eq('user_id', session.user.id).eq('id', id)
   if (error) throw error
 }
 

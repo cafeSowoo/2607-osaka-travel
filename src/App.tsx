@@ -16,6 +16,7 @@ import {
   Luggage,
   MapPin,
   MoreHorizontal,
+  NotebookPen,
   PencilLine,
   Plane,
   Plus,
@@ -52,14 +53,15 @@ import {
 import { sortItineraryItems } from './lib/itinerarySort'
 import { fillItineraryWithAi } from './lib/supabase'
 import { formatTimeInput, isValidTime, normalizeTime, parseTimeToMinutes } from './lib/time'
-import type { Category, ChecklistItem, ChecklistItemKind, ItineraryItem, Reservation, SyncState, TripDay } from './types'
+import type { Category, ChecklistItem, ChecklistItemKind, ItineraryItem, Memo, Reservation, SyncState, TripDay } from './types'
 
-type View = 'schedule' | 'reservations' | 'checklist' | 'settings'
+type View = 'schedule' | 'reservations' | 'checklist' | 'memos' | 'settings'
 
 const views: Array<{ id: View; label: string; icon: typeof CalendarDays }> = [
   { id: 'schedule', label: '일정', icon: CalendarDays },
   { id: 'reservations', label: '예약', icon: Plane },
   { id: 'checklist', label: '체크리스트', icon: ListChecks },
+  { id: 'memos', label: '메모', icon: NotebookPen },
   { id: 'settings', label: '설정', icon: Settings },
 ]
 const viewIds = views.map((view) => view.id)
@@ -1521,37 +1523,16 @@ function ChecklistView({
   const [draftTitle, setDraftTitle] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState('')
-  const [actionMenuId, setActionMenuId] = useState<string | null>(null)
   const [pendingDeleteItem, setPendingDeleteItem] = useState<ChecklistItem | null>(null)
   const [dragState, setDragState] = useState<ChecklistDragState | null>(null)
   const dragStateRef = useRef<ChecklistDragState | null>(null)
   const dragImageRef = useRef<HTMLElement | null>(null)
-  const actionMenuRef = useRef<HTMLDivElement | null>(null)
   const listRefs = useRef<Partial<Record<ChecklistItem['section'], HTMLDivElement | null>>>({})
   const flipBeforeRef = useRef<Map<string, DOMRect>>(new Map())
 
   useEffect(() => {
     dragStateRef.current = dragState
   }, [dragState])
-
-  useEffect(() => {
-    if (!actionMenuId) return
-
-    const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (event.target instanceof Node && actionMenuRef.current?.contains(event.target)) return
-      setActionMenuId(null)
-    }
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setActionMenuId(null)
-    }
-
-    document.addEventListener('pointerdown', closeOnOutsidePointer)
-    document.addEventListener('keydown', closeOnEscape)
-    return () => {
-      document.removeEventListener('pointerdown', closeOnOutsidePointer)
-      document.removeEventListener('keydown', closeOnEscape)
-    }
-  }, [actionMenuId])
 
   const captureFlipBefore = (section: ChecklistItem['section']) => {
     const list = listRefs.current[section]
@@ -1652,7 +1633,6 @@ function ChecklistView({
 
   const startEditing = (item: ChecklistItem) => {
     if (readonly || dragStateRef.current) return
-    setActionMenuId(null)
     setAddingSection(null)
     setDraftTitle('')
     setEditingId(item.id)
@@ -1686,7 +1666,6 @@ function ChecklistView({
   }
 
   const requestDelete = (item: ChecklistItem) => {
-    setActionMenuId(null)
     setPendingDeleteItem(item)
   }
 
@@ -1860,7 +1839,6 @@ function ChecklistView({
                 const isDraggingSection = dragState?.section === section
                 const isPreview = isDraggingSection && dragState.fromId === item.id
                 const isEditing = editingId === item.id
-                const isActionMenuOpen = actionMenuId === item.id
                 const shift = isDraggingSection
                   ? getContinuousShifts(sectionItems, dragState.fromId, dragState.floatIndex, dragState.slotHeight)[item.id] ?? 0
                   : 0
@@ -1900,6 +1878,16 @@ function ChecklistView({
                           </button>
                         )}
                       </div>
+                      <button
+                        type="button"
+                        className="check-delete"
+                        disabled={readonly || isPreview || isEditing}
+                        aria-label={`${item.title} 구분자 삭제`}
+                        title="구분자 삭제"
+                        onClick={() => requestDelete(item)}
+                      >
+                        <X size={15} />
+                      </button>
                     </>
                   ) : (
                     <div className="check-toggle">
@@ -1936,43 +1924,22 @@ function ChecklistView({
                       )}
                     </div>
                   )}
-                  <div
-                    className="check-actions"
-                    ref={isActionMenuOpen ? actionMenuRef : undefined}
-                  >
-                    <button
-                      type="button"
-                      className="check-action-trigger"
-                      disabled={readonly || isPreview || isEditing}
-                      aria-label={`${item.title} 메뉴`}
-                      aria-haspopup="menu"
-                      aria-expanded={isActionMenuOpen}
-                      onClick={() => setActionMenuId((current) => current === item.id ? null : item.id)}
-                    >
-                      <MoreHorizontal size={17} />
-                    </button>
-                    {isActionMenuOpen && (
-                      <div className="check-action-menu" role="menu">
+                  {!isDivider && (
+                    <div className="check-actions">
+                      {item.done && (
                         <button
                           type="button"
-                          role="menuitem"
-                          onClick={() => startEditing(item)}
-                        >
-                          <PencilLine size={15} />
-                          수정
-                        </button>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="danger"
+                          className="check-delete completed-task-delete"
+                          disabled={readonly || isPreview || isEditing}
+                          aria-label={`${item.title} 삭제`}
+                          title="완료 항목 삭제"
                           onClick={() => requestDelete(item)}
                         >
                           <Trash2 size={15} />
-                          삭제
                         </button>
-                      </div>
-                    )}
-                  </div>
+                      )}
+                    </div>
+                  )}
                   <button
                     type="button"
                     className="drag-handle"
@@ -1994,6 +1961,203 @@ function ChecklistView({
           </article>
         )
       })}
+      </section>
+    </>
+  )
+}
+
+const formatMemoTimestamp = (value: string) => {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return new Intl.DateTimeFormat('ko-KR', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
+function MemoView({
+  memos,
+  tripId,
+  onSave,
+  onDelete,
+  readonly,
+}: {
+  memos: Memo[]
+  tripId: string
+  onSave: (memo: Memo) => Memo
+  onDelete: (id: string) => void
+  readonly: boolean
+}) {
+  const sortedMemos = useMemo(
+    () => [...memos].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    [memos],
+  )
+  const [draft, setDraft] = useState<Memo | null>(() => sortedMemos[0] ? { ...sortedMemos[0] } : null)
+  const [dirty, setDirty] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<Memo | null>(null)
+  const draftExists = Boolean(draft && memos.some((memo) => memo.id === draft.id))
+
+  const saveDraft = useCallback(() => {
+    if (!draft || readonly || (!draftExists && !draft.title.trim() && !draft.content.trim())) return
+    const saved = onSave(draft)
+    setDraft(saved)
+    setDirty(false)
+  }, [draft, draftExists, onSave, readonly])
+
+  useEffect(() => {
+    if (!dirty || !draft || readonly) return
+    const saveTimer = window.setTimeout(saveDraft, 800)
+    return () => window.clearTimeout(saveTimer)
+  }, [dirty, draft, readonly, saveDraft])
+
+  const startNewMemo = () => {
+    if (dirty) saveDraft()
+    const now = new Date().toISOString()
+    setDraft({
+      id: crypto.randomUUID(),
+      tripId,
+      title: '',
+      content: '',
+      createdAt: now,
+      updatedAt: now,
+    })
+    setDirty(false)
+  }
+
+  const selectMemo = (memo: Memo) => {
+    if (draft?.id === memo.id) return
+    if (dirty) saveDraft()
+    setDraft({ ...memo })
+    setDirty(false)
+  }
+
+  const updateDraft = (patch: Partial<Pick<Memo, 'title' | 'content'>>) => {
+    setDraft((current) => current ? { ...current, ...patch } : current)
+    setDirty(true)
+  }
+
+  const confirmDeleteMemo = () => {
+    if (!pendingDelete) return
+    const deleteId = pendingDelete.id
+    const nextMemo = sortedMemos.find((memo) => memo.id !== deleteId)
+    onDelete(deleteId)
+    if (draft?.id === deleteId) {
+      setDraft(nextMemo ? { ...nextMemo } : null)
+      setDirty(false)
+    }
+    setPendingDelete(null)
+  }
+
+  return (
+    <>
+      {pendingDelete && (
+        <div className="confirm-overlay" role="presentation" onClick={() => setPendingDelete(null)}>
+          <section
+            className="confirm-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="memo-delete-confirm-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="memo-delete-confirm-title">메모를 삭제할까요?</h2>
+            <p>“{pendingDelete.title || '제목 없는 메모'}” 메모는 삭제 후 되돌릴 수 없습니다.</p>
+            <div className="confirm-actions">
+              <button className="ghost-button" type="button" onClick={() => setPendingDelete(null)}>취소</button>
+              <button className="primary-button danger-confirm" type="button" onClick={confirmDeleteMemo}>삭제</button>
+            </div>
+          </section>
+        </div>
+      )}
+      <section className="memo-screen">
+        <aside className="panel memo-list-panel">
+          <div className="panel-header">
+            <h3>메모</h3>
+            <button
+              className="round-add-button"
+              type="button"
+              disabled={readonly}
+              aria-label="새 메모"
+              onClick={startNewMemo}
+            >
+              <Plus size={16} />
+            </button>
+          </div>
+          <div className="memo-list">
+            {sortedMemos.map((memo) => (
+              <button
+                key={memo.id}
+                type="button"
+                className={draft?.id === memo.id ? 'active' : ''}
+                onClick={() => selectMemo(memo)}
+              >
+                <strong>{memo.title || '제목 없는 메모'}</strong>
+                <span>{memo.content.trim() || '내용 없음'}</span>
+                <time>{formatMemoTimestamp(memo.updatedAt)}</time>
+              </button>
+            ))}
+            {!sortedMemos.length && (
+              <div className="memo-list-empty">새 메모를 만들어 여행 정보를 기록해보세요.</div>
+            )}
+          </div>
+        </aside>
+
+        <article className="panel memo-editor-panel">
+          {draft ? (
+            <>
+              <input
+                className="memo-title-input"
+                value={draft.title}
+                placeholder="메모 제목"
+                disabled={readonly}
+                aria-label="메모 제목"
+                onChange={(event) => updateDraft({ title: event.target.value })}
+              />
+              <textarea
+                className="memo-content-input"
+                value={draft.content}
+                placeholder="여행 중 기억할 내용, 주소, 쇼핑 목록 등을 자유롭게 적어보세요."
+                disabled={readonly}
+                aria-label="메모 내용"
+                onChange={(event) => updateDraft({ content: event.target.value })}
+              />
+              <div className="memo-editor-footer">
+                <span role="status">{dirty ? '자동 저장 중…' : '저장됨'}</span>
+                <div className="memo-editor-actions">
+                  {draftExists && (
+                    <button
+                      className="ghost-button danger"
+                      type="button"
+                      disabled={readonly}
+                      onClick={() => setPendingDelete(draft)}
+                    >
+                      <Trash2 size={15} />
+                      삭제
+                    </button>
+                  )}
+                  <button
+                    className="primary-button"
+                    type="button"
+                    disabled={readonly || (!draftExists && !draft.title.trim() && !draft.content.trim())}
+                    onClick={saveDraft}
+                  >
+                    저장
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="memo-editor-empty">
+              <NotebookPen size={28} />
+              <strong>메모가 없습니다</strong>
+              <span>새 메모 버튼을 눌러 기록을 시작하세요.</span>
+              <button className="primary-button" type="button" disabled={readonly} onClick={startNewMemo}>
+                새 메모
+              </button>
+            </div>
+          )}
+        </article>
       </section>
     </>
   )
@@ -2108,6 +2272,8 @@ function App() {
     updateChecklistItem,
     deleteChecklistItem,
     reorderChecklistItems,
+    upsertMemo,
+    deleteMemo,
   } = useTravelData()
 
   const [activeView, setActiveView] = useState<View>(getViewFromHash)
@@ -2326,6 +2492,15 @@ function App() {
             onUpdate={updateChecklistItem}
             onDelete={deleteChecklistItem}
             onReorder={reorderChecklistItems}
+            readonly={syncState.readonly}
+          />
+        )}
+        {activeView === 'memos' && (
+          <MemoView
+            memos={data.memos}
+            tripId={data.trip.id}
+            onSave={upsertMemo}
+            onDelete={deleteMemo}
             readonly={syncState.readonly}
           />
         )}
