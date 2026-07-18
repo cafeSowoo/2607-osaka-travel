@@ -1521,15 +1521,37 @@ function ChecklistView({
   const [draftTitle, setDraftTitle] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState('')
+  const [actionMenuId, setActionMenuId] = useState<string | null>(null)
+  const [pendingDeleteItem, setPendingDeleteItem] = useState<ChecklistItem | null>(null)
   const [dragState, setDragState] = useState<ChecklistDragState | null>(null)
   const dragStateRef = useRef<ChecklistDragState | null>(null)
   const dragImageRef = useRef<HTMLElement | null>(null)
+  const actionMenuRef = useRef<HTMLDivElement | null>(null)
   const listRefs = useRef<Partial<Record<ChecklistItem['section'], HTMLDivElement | null>>>({})
   const flipBeforeRef = useRef<Map<string, DOMRect>>(new Map())
 
   useEffect(() => {
     dragStateRef.current = dragState
   }, [dragState])
+
+  useEffect(() => {
+    if (!actionMenuId) return
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (event.target instanceof Node && actionMenuRef.current?.contains(event.target)) return
+      setActionMenuId(null)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setActionMenuId(null)
+    }
+
+    document.addEventListener('pointerdown', closeOnOutsidePointer)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [actionMenuId])
 
   const captureFlipBefore = (section: ChecklistItem['section']) => {
     const list = listRefs.current[section]
@@ -1630,6 +1652,7 @@ function ChecklistView({
 
   const startEditing = (item: ChecklistItem) => {
     if (readonly || dragStateRef.current) return
+    setActionMenuId(null)
     setAddingSection(null)
     setDraftTitle('')
     setEditingId(item.id)
@@ -1660,6 +1683,22 @@ function ChecklistView({
       event.preventDefault()
       cancelEditing()
     }
+  }
+
+  const requestDelete = (item: ChecklistItem) => {
+    setActionMenuId(null)
+    setPendingDeleteItem(item)
+  }
+
+  const cancelDelete = () => {
+    setPendingDeleteItem(null)
+  }
+
+  const confirmDelete = () => {
+    if (!pendingDeleteItem) return
+    if (editingId === pendingDeleteItem.id) cancelEditing()
+    onDelete(pendingDeleteItem.id)
+    setPendingDeleteItem(null)
   }
 
   const startDrag = (item: ChecklistItem, sectionItems: ChecklistItem[], event: ReactDragEvent<HTMLButtonElement>) => {
@@ -1740,7 +1779,26 @@ function ChecklistView({
   }
 
   return (
-    <section className="checklist-board">
+    <>
+      {pendingDeleteItem && (
+        <div className="confirm-overlay" role="presentation" onClick={cancelDelete}>
+          <section
+            className="confirm-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="checklist-delete-confirm-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="checklist-delete-confirm-title">체크리스트 항목을 삭제할까요?</h2>
+            <p>“{pendingDeleteItem.title}” 항목은 삭제 후 되돌릴 수 없습니다.</p>
+            <div className="confirm-actions">
+              <button className="ghost-button" type="button" onClick={cancelDelete}>취소</button>
+              <button className="primary-button danger-confirm" type="button" onClick={confirmDelete}>삭제</button>
+            </div>
+          </section>
+        </div>
+      )}
+      <section className="checklist-board">
       {sections.map((section) => {
         const sectionItems = items.filter((item) => item.section === section).sort((a, b) => a.sortOrder - b.sortOrder)
 
@@ -1802,6 +1860,7 @@ function ChecklistView({
                 const isDraggingSection = dragState?.section === section
                 const isPreview = isDraggingSection && dragState.fromId === item.id
                 const isEditing = editingId === item.id
+                const isActionMenuOpen = actionMenuId === item.id
                 const shift = isDraggingSection
                   ? getContinuousShifts(sectionItems, dragState.fromId, dragState.floatIndex, dragState.slotHeight)[item.id] ?? 0
                   : 0
@@ -1841,16 +1900,6 @@ function ChecklistView({
                           </button>
                         )}
                       </div>
-                      <button
-                        type="button"
-                        className="check-delete"
-                        disabled={readonly || isPreview}
-                        aria-label={`${item.title} 구분자 삭제`}
-                        title="구분자 삭제"
-                        onClick={() => onDelete(item.id)}
-                      >
-                        <X size={15} />
-                      </button>
                     </>
                   ) : (
                     <div className="check-toggle">
@@ -1887,6 +1936,43 @@ function ChecklistView({
                       )}
                     </div>
                   )}
+                  <div
+                    className="check-actions"
+                    ref={isActionMenuOpen ? actionMenuRef : undefined}
+                  >
+                    <button
+                      type="button"
+                      className="check-action-trigger"
+                      disabled={readonly || isPreview || isEditing}
+                      aria-label={`${item.title} 메뉴`}
+                      aria-haspopup="menu"
+                      aria-expanded={isActionMenuOpen}
+                      onClick={() => setActionMenuId((current) => current === item.id ? null : item.id)}
+                    >
+                      <MoreHorizontal size={17} />
+                    </button>
+                    {isActionMenuOpen && (
+                      <div className="check-action-menu" role="menu">
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => startEditing(item)}
+                        >
+                          <PencilLine size={15} />
+                          수정
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="danger"
+                          onClick={() => requestDelete(item)}
+                        >
+                          <Trash2 size={15} />
+                          삭제
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   <button
                     type="button"
                     className="drag-handle"
@@ -1908,7 +1994,8 @@ function ChecklistView({
           </article>
         )
       })}
-    </section>
+      </section>
+    </>
   )
 }
 

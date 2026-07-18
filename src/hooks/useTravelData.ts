@@ -287,7 +287,7 @@ export const useTravelData = () => {
   const deleteChecklistItem = useCallback(
     (id: string) => {
       const item = data.checklistItems.find((candidate) => candidate.id === id)
-      if (!item || item.kind !== 'divider') return
+      if (!item) return
 
       const next = {
         ...data,

@@ -80,6 +80,15 @@ button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: no
   text-align: center;
 }
 
+.confirm-dialog p {
+  margin: -8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
 .confirm-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1089,7 +1098,7 @@ textarea { min-height: 56px; resize: vertical; }
 .check-item {
   min-height: 44px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 34px;
+  grid-template-columns: minmax(0, 1fr) 34px 34px;
   align-items: center;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -1097,7 +1106,6 @@ textarea { min-height: 56px; resize: vertical; }
 }
 .check-item.divider {
   min-height: 38px;
-  grid-template-columns: minmax(0, 1fr) 28px 34px;
   background: var(--accent-soft);
   border-color: transparent;
 }
@@ -1126,9 +1134,14 @@ textarea { min-height: 56px; resize: vertical; }
   color: var(--accent);
   font-weight: 700;
 }
-.check-delete {
-  width: 28px;
-  height: 28px;
+.check-actions {
+  position: relative;
+  width: 34px;
+  height: 34px;
+}
+.check-action-trigger {
+  width: 34px;
+  height: 34px;
   display: inline-grid;
   place-items: center;
   padding: 0;
@@ -1137,7 +1150,51 @@ textarea { min-height: 56px; resize: vertical; }
   background: transparent;
   color: var(--muted);
 }
-.check-delete:hover:not(:disabled) { background: rgba(255, 255, 255, 0.72); color: #c0392b; }
+.check-action-trigger:hover:not(:disabled),
+.check-action-trigger[aria-expanded='true'] {
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--accent);
+}
+.check-action-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 12;
+  min-width: 112px;
+  display: grid;
+  gap: 2px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
+}
+.check-action-menu button {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+  white-space: nowrap;
+}
+.check-action-menu button:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.check-action-menu button.danger {
+  color: var(--danger);
+}
+.check-action-menu button.danger:hover {
+  background: rgba(220, 38, 38, 0.08);
+  color: #b91c1c;
+}
 .check-list.is-sorting .check-item {
   transition: transform 140ms cubic-bezier(0.2, 0, 0, 1);
 }
