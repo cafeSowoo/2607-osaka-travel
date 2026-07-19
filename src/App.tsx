@@ -1,4 +1,5 @@
 import {
+  ArrowLeft,
   ArrowUpRight,
   CalendarDays,
   Check,
@@ -1983,13 +1984,16 @@ function MemoView({
   onSave,
   onDelete,
   readonly,
+  onMobileEditorChange,
 }: {
   memos: Memo[]
   tripId: string
   onSave: (memo: Memo) => Memo
   onDelete: (id: string) => void
   readonly: boolean
+  onMobileEditorChange: (open: boolean) => void
 }) {
+  const mobileLayout = useMobileLayout()
   const sortedMemos = useMemo(
     () => [...memos].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
     [memos],
@@ -1997,6 +2001,8 @@ function MemoView({
   const [draft, setDraft] = useState<Memo | null>(() => sortedMemos[0] ? { ...sortedMemos[0] } : null)
   const [dirty, setDirty] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<Memo | null>(null)
+  const [mobileEditorOpen, setMobileEditorOpen] = useState(false)
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false)
   const draftExists = Boolean(draft && memos.some((memo) => memo.id === draft.id))
 
   const saveDraft = useCallback(() => {
@@ -2012,6 +2018,16 @@ function MemoView({
     return () => window.clearTimeout(saveTimer)
   }, [dirty, draft, readonly, saveDraft])
 
+  useEffect(() => {
+    const editorOpen = mobileLayout && mobileEditorOpen
+    onMobileEditorChange(editorOpen)
+    if (!mobileLayout) {
+      setMobileEditorOpen(false)
+      setMobileMoreOpen(false)
+    }
+    return () => onMobileEditorChange(false)
+  }, [mobileEditorOpen, mobileLayout, onMobileEditorChange])
+
   const startNewMemo = () => {
     if (dirty) saveDraft()
     const now = new Date().toISOString()
@@ -2024,13 +2040,18 @@ function MemoView({
       updatedAt: now,
     })
     setDirty(false)
+    if (mobileLayout) setMobileEditorOpen(true)
   }
 
   const selectMemo = (memo: Memo) => {
-    if (draft?.id === memo.id) return
+    if (draft?.id === memo.id) {
+      if (mobileLayout) setMobileEditorOpen(true)
+      return
+    }
     if (dirty) saveDraft()
     setDraft({ ...memo })
     setDirty(false)
+    if (mobileLayout) setMobileEditorOpen(true)
   }
 
   const updateDraft = (patch: Partial<Pick<Memo, 'title' | 'content'>>) => {
@@ -2048,6 +2069,14 @@ function MemoView({
       setDirty(false)
     }
     setPendingDelete(null)
+    setMobileMoreOpen(false)
+    if (mobileLayout) setMobileEditorOpen(false)
+  }
+
+  const closeMobileEditor = () => {
+    if (dirty) saveDraft()
+    setMobileMoreOpen(false)
+    setMobileEditorOpen(false)
   }
 
   return (
@@ -2070,7 +2099,7 @@ function MemoView({
           </section>
         </div>
       )}
-      <section className="memo-screen">
+      <section className={`memo-screen ${mobileLayout ? (mobileEditorOpen ? 'mobile-editor-open' : 'mobile-list-open') : ''}`}>
         <aside className="panel memo-list-panel">
           <div className="panel-header">
             <h3>메모</h3>
@@ -2106,6 +2135,46 @@ function MemoView({
         <article className="panel memo-editor-panel">
           {draft ? (
             <>
+              <header className="memo-mobile-editor-header">
+                <button
+                  className="memo-mobile-icon-button"
+                  type="button"
+                  aria-label="메모 목록으로 돌아가기"
+                  onClick={closeMobileEditor}
+                >
+                  <ArrowLeft size={21} />
+                </button>
+                <div className="memo-mobile-editor-heading">
+                  <strong>메모 편집</strong>
+                  <span role="status" aria-live="polite">{dirty ? '자동 저장 중…' : '저장됨'}</span>
+                </div>
+                <div className="memo-mobile-more">
+                  <button
+                    className="memo-mobile-icon-button"
+                    type="button"
+                    aria-label="메모 메뉴"
+                    aria-expanded={mobileMoreOpen}
+                    onClick={() => setMobileMoreOpen((open) => !open)}
+                  >
+                    <MoreHorizontal size={22} />
+                  </button>
+                  {mobileMoreOpen && (
+                    <div className="memo-mobile-more-menu">
+                      <button
+                        type="button"
+                        disabled={readonly || !draftExists}
+                        onClick={() => {
+                          setMobileMoreOpen(false)
+                          setPendingDelete(draft)
+                        }}
+                      >
+                        <Trash2 size={16} />
+                        메모 삭제
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </header>
               <input
                 className="memo-title-input"
                 value={draft.title}
@@ -2282,6 +2351,7 @@ function App() {
   const [showKrw, setShowKrw] = useState(false)
   const [saveToastVisible, setSaveToastVisible] = useState(false)
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  const [mobileMemoEditing, setMobileMemoEditing] = useState(false)
   const mobileDetailHistoryRef = useRef(false)
   const pendingSaveToastRef = useRef(false)
   const saveToastTimerRef = useRef<number | null>(null)
@@ -2462,8 +2532,8 @@ function App() {
         </div>
       )}
       <ShellNav activeView={activeView} setActiveView={navigate} />
-      <main className="workspace">
-        {activeView !== 'schedule' && <StatusStrip title={activeViewLabel} message={syncState.message} offline={syncState.offline} readonly={syncState.readonly} onRefresh={refresh} onLogout={logout} syncState={syncState} />}
+      <main className={`workspace ${mobileMemoEditing ? 'mobile-memo-editing' : ''}`}>
+        {activeView !== 'schedule' && !mobileMemoEditing && <StatusStrip title={activeViewLabel} message={syncState.message} offline={syncState.offline} readonly={syncState.readonly} onRefresh={refresh} onLogout={logout} syncState={syncState} />}
         {activeView === 'schedule' && (
           <ScheduleView
             days={data.days}
@@ -2502,6 +2572,7 @@ function App() {
             onSave={upsertMemo}
             onDelete={deleteMemo}
             readonly={syncState.readonly}
+            onMobileEditorChange={setMobileMemoEditing}
           />
         )}
         {activeView === 'settings' && (
@@ -2515,7 +2586,7 @@ function App() {
           />
         )}
       </main>
-      <MobileTabs activeView={activeView} setActiveView={navigate} />
+      {!mobileMemoEditing && <MobileTabs activeView={activeView} setActiveView={navigate} />}
     </div>
   )
 }

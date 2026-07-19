@@ -1223,10 +1223,13 @@ textarea { min-height: 56px; resize: vertical; }
   grid-template-columns: minmax(230px, 300px) minmax(0, 1fr);
   gap: 14px;
   align-items: start;
+  min-width: 0;
 }
 .memo-list-panel,
 .memo-editor-panel {
   min-height: 520px;
+  min-width: 0;
+  max-width: 100%;
 }
 .memo-list {
   display: grid;
@@ -1274,6 +1277,9 @@ textarea { min-height: 56px; resize: vertical; }
   gap: 14px;
 }
 .memo-title-input {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 46px;
   padding: 8px 2px 12px;
   border: 0;
@@ -1288,6 +1294,9 @@ textarea { min-height: 56px; resize: vertical; }
   outline: 0;
 }
 .memo-content-input {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 360px;
   padding: 4px 2px;
   border: 0;
@@ -1334,6 +1343,7 @@ textarea { min-height: 56px; resize: vertical; }
   font-size: 17px;
 }
 .memo-editor-empty .primary-button { margin-top: 6px; }
+.memo-mobile-editor-header { display: none; }
 .toggle-row { display: flex; align-items: center; justify-content: space-between; min-height: 44px; border-bottom: 1px solid var(--line); }
 .toggle-row input { width: auto; }
 .settings-budget-row {
@@ -1391,8 +1401,33 @@ textarea { min-height: 56px; resize: vertical; }
     scrollbar-width: none;
   }
   .workspace::-webkit-scrollbar { display: none; }
-  .topbar { display: grid; }
-  .topbar-actions { justify-content: flex-start; }
+  .topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    column-gap: 12px;
+    row-gap: 14px;
+  }
+  .topbar > div:first-child {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+  }
+  .topbar-actions { display: contents; }
+  .topbar-actions .sync-chip {
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: start;
+  }
+  .topbar-actions > .ghost-button {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .topbar-actions .account-cluster {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: start;
+  }
   .today-grid, .view-grid, .schedule-layout, .checklist-board, .settings-grid, .memo-screen { grid-template-columns: 1fr; }
   .schedule-screen {
     gap: 0;
@@ -1749,30 +1784,154 @@ textarea { min-height: 56px; resize: vertical; }
   }
   .mobile-tabs button { min-height: 52px; display: grid; place-items: center; border-radius: 8px; font-size: 11px; }
   .mobile-tabs button.active { background: #f0efeb; color: var(--text); }
+  .workspace.mobile-memo-editing {
+    height: 100dvh;
+    padding: 0;
+    overflow: hidden;
+  }
+  .memo-screen {
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    max-width: 100%;
+  }
   .memo-list-panel,
   .memo-editor-panel {
     min-height: auto;
+    width: 100%;
+    overflow: hidden;
   }
   .memo-list-panel { padding: 14px; }
-  .memo-list {
-    display: flex;
-    gap: 8px;
-    overflow-x: auto;
-    padding-bottom: 2px;
-    scrollbar-width: none;
+  .memo-list-panel .round-add-button {
+    width: 44px;
+    height: 44px;
   }
-  .memo-list::-webkit-scrollbar { display: none; }
+  .memo-list {
+    display: grid;
+    gap: 8px;
+    overflow: visible;
+    padding-bottom: 0;
+  }
   .memo-list > button {
-    flex: 0 0 210px;
+    width: 100%;
+    min-height: 82px;
+    padding: 13px 14px;
   }
   .memo-list-empty {
     width: 100%;
   }
-  .memo-editor-panel {
-    grid-template-rows: auto minmax(300px, 1fr) auto;
+  .memo-screen.mobile-list-open .memo-editor-panel {
+    display: none;
   }
-  .memo-content-input { min-height: 300px; }
-  .memo-editor-footer {
-    align-items: flex-end;
+  .memo-screen.mobile-editor-open {
+    display: block;
+    height: 100%;
+  }
+  .memo-screen.mobile-editor-open .memo-list-panel {
+    display: none;
+  }
+  .memo-screen.mobile-editor-open .memo-editor-panel {
+    height: 100%;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    gap: 0;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: hidden;
+  }
+  .memo-mobile-editor-header {
+    position: relative;
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    align-items: center;
+    gap: 8px;
+    min-height: calc(60px + env(safe-area-inset-top, 0px));
+    margin: 0 -16px;
+    padding: env(safe-area-inset-top, 0px) 12px 0;
+    border-bottom: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(16px);
+  }
+  .memo-mobile-icon-button {
+    width: 44px;
+    height: 44px;
+    display: inline-grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text);
+  }
+  .memo-mobile-icon-button:hover:not(:disabled),
+  .memo-mobile-icon-button:focus-visible {
+    background: var(--surface-subtle);
+  }
+  .memo-mobile-editor-heading {
+    min-width: 0;
+    display: grid;
+    justify-items: center;
+    gap: 2px;
+  }
+  .memo-mobile-editor-heading strong {
+    font-size: 15px;
+  }
+  .memo-mobile-editor-heading span {
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .memo-mobile-more {
+    position: relative;
+  }
+  .memo-mobile-more-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 5;
+    width: 150px;
+    padding: 6px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    box-shadow: 0 16px 38px rgba(15, 23, 42, 0.16);
+  }
+  .memo-mobile-more-menu button {
+    width: 100%;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--danger);
+    font-size: 13px;
+    font-weight: 750;
+  }
+  .memo-mobile-more-menu button:hover:not(:disabled) {
+    background: #fff1f2;
+  }
+  .memo-screen.mobile-editor-open .memo-title-input {
+    min-height: 58px;
+    padding: 13px 0 11px;
+    font-size: 21px;
+  }
+  .memo-screen.mobile-editor-open .memo-content-input {
+    height: 100%;
+    min-height: 0;
+    padding: 14px 0 calc(24px + env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+    line-height: 1.7;
+    resize: none;
+    overscroll-behavior: contain;
+  }
+  .memo-screen.mobile-editor-open .memo-editor-footer {
+    display: none;
+  }
+  .memo-screen.mobile-editor-open .memo-editor-empty {
+    min-height: 100%;
   }
 }
