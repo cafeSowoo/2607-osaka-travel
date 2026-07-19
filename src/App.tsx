@@ -2533,7 +2533,7 @@ function App() {
       )}
       <ShellNav activeView={activeView} setActiveView={navigate} />
       <main className={`workspace ${mobileMemoEditing ? 'mobile-memo-editing' : ''}`}>
-        {activeView !== 'schedule' && !mobileMemoEditing && <StatusStrip title={activeViewLabel} message={syncState.message} offline={syncState.offline} readonly={syncState.readonly} onRefresh={refresh} onLogout={logout} syncState={syncState} />}
+        {activeView !== 'schedule' && <StatusStrip title={activeViewLabel} message={syncState.message} offline={syncState.offline} readonly={syncState.readonly} onRefresh={refresh} onLogout={logout} syncState={syncState} />}
         {activeView === 'schedule' && (
           <ScheduleView
             days={data.days}
@@ -2586,7 +2586,7 @@ function App() {
           />
         )}
       </main>
-      {!mobileMemoEditing && <MobileTabs activeView={activeView} setActiveView={navigate} />}
+      <MobileTabs activeView={activeView} setActiveView={navigate} />
     </div>
   )
 }

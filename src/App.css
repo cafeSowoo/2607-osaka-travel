@@ -1785,9 +1785,12 @@ textarea { min-height: 56px; resize: vertical; }
   .mobile-tabs button { min-height: 52px; display: grid; place-items: center; border-radius: 8px; font-size: 11px; }
   .mobile-tabs button.active { background: #f0efeb; color: var(--text); }
   .workspace.mobile-memo-editing {
-    height: 100dvh;
-    padding: 0;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
     overflow: hidden;
+  }
+  .workspace.mobile-memo-editing .topbar {
+    margin-bottom: 14px;
   }
   .memo-screen {
     grid-template-columns: minmax(0, 1fr);
@@ -1825,6 +1828,7 @@ textarea { min-height: 56px; resize: vertical; }
   .memo-screen.mobile-editor-open {
     display: block;
     height: 100%;
+    min-height: 0;
   }
   .memo-screen.mobile-editor-open .memo-list-panel {
     display: none;
@@ -1836,9 +1840,9 @@ textarea { min-height: 56px; resize: vertical; }
     grid-template-rows: auto auto minmax(0, 1fr);
     gap: 0;
     padding: 0 16px;
-    border: 0;
-    border-radius: 0;
-    box-shadow: none;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
     overflow: hidden;
   }
   .memo-mobile-editor-header {
@@ -1847,9 +1851,9 @@ textarea { min-height: 56px; resize: vertical; }
     grid-template-columns: 44px minmax(0, 1fr) 44px;
     align-items: center;
     gap: 8px;
-    min-height: calc(60px + env(safe-area-inset-top, 0px));
+    min-height: 58px;
     margin: 0 -16px;
-    padding: env(safe-area-inset-top, 0px) 12px 0;
+    padding: 0 12px;
     border-bottom: 1px solid var(--line);
     background: rgba(255, 255, 255, 0.96);
     backdrop-filter: blur(16px);
