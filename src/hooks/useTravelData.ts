@@ -18,12 +18,44 @@ import {
   signOut,
   supabase,
 } from '../lib/supabase'
-import type { ChecklistItem, ChecklistItemKind, ItineraryItem, Memo, SyncState, TravelData, Trip } from '../types'
+import type {
+  ChecklistItem,
+  ChecklistItemKind,
+  ChecklistListType,
+  ItineraryItem,
+  Memo,
+  PackingCategory,
+  SyncState,
+  TravelData,
+  Trip,
+} from '../types'
 
 const uuid = () => crypto.randomUUID()
-const mergeTasksWithDividers = (sectionItems: ChecklistItem[], reorderedTasks: ChecklistItem[]) => {
-  const queue = [...reorderedTasks]
-  return sectionItems.map((item) => (item.kind === 'divider' ? item : queue.shift()!))
+
+const getChecklistToggleGroup = (items: ChecklistItem[], target: ChecklistItem) => {
+  if (target.listType === 'packing') {
+    return items
+      .filter((item) => (
+        item.listType === 'packing'
+        && item.packingCategory === target.packingCategory
+        && item.kind === 'task'
+      ))
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+  }
+
+  const sectionItems = items
+    .filter((item) => item.listType === 'todo' && item.section === target.section)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+  const targetIndex = sectionItems.findIndex((item) => item.id === target.id)
+  if (targetIndex < 0) return []
+
+  let startIndex = targetIndex
+  while (startIndex > 0 && sectionItems[startIndex - 1].kind !== 'divider') startIndex -= 1
+
+  let endIndex = targetIndex + 1
+  while (endIndex < sectionItems.length && sectionItems[endIndex].kind !== 'divider') endIndex += 1
+
+  return sectionItems.slice(startIndex, endIndex).filter((item) => item.kind === 'task')
 }
 
 export const useTravelData = () => {
@@ -213,33 +245,32 @@ export const useTravelData = () => {
       const item = data.checklistItems.find((candidate) => candidate.id === id)
       if (!item || item.kind === 'divider') return
 
-      const sectionItems = data.checklistItems
-        .filter((candidate) => candidate.section === item.section)
-        .sort((a, b) => a.sortOrder - b.sortOrder)
+      const groupItems = getChecklistToggleGroup(data.checklistItems, item)
+      if (!groupItems.length) return
+
       const nextDone = !item.done
-      const others = sectionItems.filter((candidate) => candidate.id !== id && candidate.kind === 'task')
+      const others = groupItems.filter((candidate) => candidate.id !== id)
       const incomplete = others.filter((candidate) => !candidate.done)
       const complete = others.filter((candidate) => candidate.done)
       const nextItem: ChecklistItem = { ...item, done: nextDone }
       const reorderedTasks = nextDone
         ? [...incomplete, ...complete, nextItem]
         : [...incomplete, nextItem, ...complete]
-      const merged = mergeTasksWithDividers(sectionItems, reorderedTasks)
-      const updatedSectionItems = merged.map((candidate, index) => ({
+      const sortOrderSlots = groupItems.map((candidate) => candidate.sortOrder).sort((a, b) => a - b)
+      const updatedGroupItems = reorderedTasks.map((candidate, index) => ({
         ...candidate,
-        sortOrder: (index + 1) * 10,
+        sortOrder: sortOrderSlots[index],
       }))
-      const updatedById = new Map(updatedSectionItems.map((candidate) => [candidate.id, candidate]))
+      const updatedById = new Map(updatedGroupItems.map((candidate) => [candidate.id, candidate]))
       const next = {
         ...data,
         checklistItems: data.checklistItems
-          .map((candidate) => updatedById.get(candidate.id) ?? candidate)
-          .sort((a, b) => a.section.localeCompare(b.section) || a.sortOrder - b.sortOrder),
+          .map((candidate) => updatedById.get(candidate.id) ?? candidate),
       }
       persist(
         next,
         session ? async () => {
-          await Promise.all(updatedSectionItems.map((candidate) => saveChecklistItem(candidate, session)))
+          await Promise.all(updatedGroupItems.map((candidate) => saveChecklistItem(candidate, session)))
         } : undefined,
       )
     },
@@ -247,22 +278,33 @@ export const useTravelData = () => {
   )
 
   const addChecklistItem = useCallback(
-    (section: ChecklistItem['section'], title: string, kind: ChecklistItemKind = 'task') => {
+    (
+      section: ChecklistItem['section'],
+      title: string,
+      kind: ChecklistItemKind = 'task',
+      listType: ChecklistListType = 'todo',
+      packingCategory: PackingCategory | null = null,
+    ) => {
       const cleanTitle = title.trim()
       if (!cleanTitle) return
-      const sectionItems = data.checklistItems.filter((item) => item.section === section)
+      const groupItems = data.checklistItems.filter((item) => (
+        item.listType === listType
+        && (listType === 'packing' ? item.packingCategory === packingCategory : item.section === section)
+      ))
       const nextItem: ChecklistItem = {
         id: uuid(),
         tripId: data.trip.id,
         section,
-        kind,
+        kind: listType === 'packing' ? 'task' : kind,
+        listType,
+        packingCategory: listType === 'packing' ? packingCategory ?? '기타' : null,
         title: cleanTitle,
         done: false,
-        sortOrder: sectionItems.length * 10 + 10,
+        sortOrder: Math.max(0, ...groupItems.map((item) => item.sortOrder)) + 10,
       }
       const next = {
         ...data,
-        checklistItems: [...data.checklistItems, nextItem].sort((a, b) => a.section.localeCompare(b.section) || a.sortOrder - b.sortOrder),
+        checklistItems: [...data.checklistItems, nextItem],
       }
       persist(next, session ? () => saveChecklistItem(nextItem, session) : undefined)
     },
@@ -301,28 +343,42 @@ export const useTravelData = () => {
   )
 
   const reorderChecklistItems = useCallback(
-    (section: ChecklistItem['section'], fromId: string, toId: string) => {
+    (fromId: string, toId: string) => {
       if (fromId === toId) return
-      const sectionItems = data.checklistItems.filter((item) => item.section === section).sort((a, b) => a.sortOrder - b.sortOrder)
-      const fromIndex = sectionItems.findIndex((item) => item.id === fromId)
-      const toIndex = sectionItems.findIndex((item) => item.id === toId)
+      const fromItem = data.checklistItems.find((item) => item.id === fromId)
+      const toItem = data.checklistItems.find((item) => item.id === toId)
+      if (!fromItem || !toItem || fromItem.listType !== toItem.listType) return
+      if (fromItem.listType === 'todo' && fromItem.section !== toItem.section) return
+      if (fromItem.listType === 'packing' && fromItem.packingCategory !== toItem.packingCategory) return
+
+      const groupItems = data.checklistItems
+        .filter((item) => (
+          item.listType === fromItem.listType
+          && (
+            fromItem.listType === 'packing'
+              ? item.packingCategory === fromItem.packingCategory
+              : item.section === fromItem.section
+          )
+        ))
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+      const fromIndex = groupItems.findIndex((item) => item.id === fromId)
+      const toIndex = groupItems.findIndex((item) => item.id === toId)
       if (fromIndex < 0 || toIndex < 0) return
 
-      const reordered = [...sectionItems]
+      const reordered = [...groupItems]
       const [moved] = reordered.splice(fromIndex, 1)
       reordered.splice(toIndex, 0, moved)
-      const updatedSectionItems = reordered.map((item, index) => ({ ...item, sortOrder: (index + 1) * 10 }))
-      const updatedById = new Map(updatedSectionItems.map((item) => [item.id, item]))
+      const updatedGroupItems = reordered.map((item, index) => ({ ...item, sortOrder: (index + 1) * 10 }))
+      const updatedById = new Map(updatedGroupItems.map((item) => [item.id, item]))
       const next = {
         ...data,
         checklistItems: data.checklistItems
-          .map((item) => updatedById.get(item.id) ?? item)
-          .sort((a, b) => a.section.localeCompare(b.section) || a.sortOrder - b.sortOrder),
+          .map((item) => updatedById.get(item.id) ?? item),
       }
       persist(
         next,
         session ? async () => {
-          await Promise.all(updatedSectionItems.map((item) => saveChecklistItem(item, session)))
+          await Promise.all(updatedGroupItems.map((item) => saveChecklistItem(item, session)))
         } : undefined,
       )
     },

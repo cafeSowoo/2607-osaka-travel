@@ -41,7 +41,7 @@ import type {
 import './App.css'
 import chatGptActionIcon from './assets/chatgpt-action-icon.png'
 import googleMapsActionIcon from './assets/google-maps-action-icon.png'
-import { BACKUP_DAY_INDEX, categories } from './data/seed'
+import { BACKUP_DAY_INDEX, categories, packingCategories } from './data/seed'
 import { useTravelData } from './hooks/useTravelData'
 import {
   createAutocompleteSessionToken,
@@ -54,7 +54,18 @@ import {
 import { sortItineraryItems } from './lib/itinerarySort'
 import { fillItineraryWithAi } from './lib/supabase'
 import { formatTimeInput, isValidTime, normalizeTime, parseTimeToMinutes } from './lib/time'
-import type { Category, ChecklistItem, ChecklistItemKind, ItineraryItem, Memo, Reservation, SyncState, TripDay } from './types'
+import type {
+  Category,
+  ChecklistItem,
+  ChecklistItemKind,
+  ChecklistListType,
+  ItineraryItem,
+  Memo,
+  PackingCategory,
+  Reservation,
+  SyncState,
+  TripDay,
+} from './types'
 
 type View = 'schedule' | 'reservations' | 'checklist' | 'memos' | 'settings'
 
@@ -1439,7 +1450,7 @@ function ReservationCard({ reservation, compact = false }: { reservation: Reserv
 }
 
 type ChecklistDragState = {
-  section: ChecklistItem['section']
+  groupKey: string
   fromId: string
   floatIndex: number
   slotHeight: number
@@ -1512,14 +1523,21 @@ function ChecklistView({
 }: {
   items: ChecklistItem[]
   onToggle: (id: string) => void
-  onAdd: (section: ChecklistItem['section'], title: string, kind?: ChecklistItemKind) => void
+  onAdd: (
+    section: ChecklistItem['section'],
+    title: string,
+    kind?: ChecklistItemKind,
+    listType?: ChecklistListType,
+    packingCategory?: PackingCategory | null,
+  ) => void
   onUpdate: (id: string, title: string) => void
   onDelete: (id: string) => void
-  onReorder: (section: ChecklistItem['section'], fromId: string, toId: string) => void
+  onReorder: (fromId: string, toId: string) => void
   readonly: boolean
 }) {
   const sections = ['출국 전', '여행 중', '귀국 전'] as const
-  const [addingSection, setAddingSection] = useState<ChecklistItem['section'] | null>(null)
+  const [activeList, setActiveList] = useState<ChecklistListType>('todo')
+  const [addingGroup, setAddingGroup] = useState<string | null>(null)
   const [addingKind, setAddingKind] = useState<ChecklistItemKind>('task')
   const [draftTitle, setDraftTitle] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -1528,15 +1546,15 @@ function ChecklistView({
   const [dragState, setDragState] = useState<ChecklistDragState | null>(null)
   const dragStateRef = useRef<ChecklistDragState | null>(null)
   const dragImageRef = useRef<HTMLElement | null>(null)
-  const listRefs = useRef<Partial<Record<ChecklistItem['section'], HTMLDivElement | null>>>({})
+  const listRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const flipBeforeRef = useRef<Map<string, DOMRect>>(new Map())
 
   useEffect(() => {
     dragStateRef.current = dragState
   }, [dragState])
 
-  const captureFlipBefore = (section: ChecklistItem['section']) => {
-    const list = listRefs.current[section]
+  const captureFlipBefore = (groupKey: string) => {
+    const list = listRefs.current[groupKey]
     if (!list) return
 
     const rects = new Map<string, DOMRect>()
@@ -1570,9 +1588,9 @@ function ChecklistView({
     flipBeforeRef.current = new Map()
   }, [items, dragState])
 
-  const handleToggle = (section: ChecklistItem['section'], itemId: string) => {
+  const handleToggle = (groupKey: string, itemId: string) => {
     if (readonly || dragStateRef.current) return
-    captureFlipBefore(section)
+    captureFlipBefore(groupKey)
     onToggle(itemId)
   }
 
@@ -1615,26 +1633,31 @@ function ChecklistView({
     }
   }, [dragState, endDrag])
 
-  const submitNewItem = (section: ChecklistItem['section'], event: ReactFormEvent<HTMLFormElement>) => {
+  const submitNewItem = (
+    section: ChecklistItem['section'],
+    listType: ChecklistListType,
+    packingCategory: PackingCategory | null,
+    event: ReactFormEvent<HTMLFormElement>,
+  ) => {
     event.preventDefault()
     const cleanTitle = draftTitle.trim()
     if (!cleanTitle) return
-    onAdd(section, cleanTitle, addingKind)
+    onAdd(section, cleanTitle, addingKind, listType, packingCategory)
     setDraftTitle('')
     setAddingKind('task')
-    setAddingSection(null)
+    setAddingGroup(null)
   }
 
-  const openAddForm = (section: ChecklistItem['section']) => {
+  const openAddForm = (groupKey: string) => {
     cancelEditing()
-    setAddingSection((current) => (current === section ? null : section))
+    setAddingGroup((current) => (current === groupKey ? null : groupKey))
     setAddingKind('task')
     setDraftTitle('')
   }
 
   const startEditing = (item: ChecklistItem) => {
     if (readonly || dragStateRef.current) return
-    setAddingSection(null)
+    setAddingGroup(null)
     setDraftTitle('')
     setEditingId(item.id)
     setEditDraft(item.title)
@@ -1681,15 +1704,20 @@ function ChecklistView({
     setPendingDeleteItem(null)
   }
 
-  const startDrag = (item: ChecklistItem, sectionItems: ChecklistItem[], event: ReactDragEvent<HTMLButtonElement>) => {
+  const startDrag = (
+    groupKey: string,
+    item: ChecklistItem,
+    groupItems: ChecklistItem[],
+    event: ReactDragEvent<HTMLButtonElement>,
+  ) => {
     if (dragStateRef.current) return
 
     const checkItem = event.currentTarget.closest('.check-item') as HTMLElement | null
-    const fromIndex = sectionItems.findIndex((entry) => entry.id === item.id)
+    const fromIndex = groupItems.findIndex((entry) => entry.id === item.id)
 
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData('text/plain', item.id)
-    event.dataTransfer.setData('application/x-checklist-section', item.section)
+    event.dataTransfer.setData('application/x-checklist-group', groupKey)
 
     if (checkItem) {
       const list = checkItem.closest('.check-list') as HTMLElement | null
@@ -1713,7 +1741,7 @@ function ChecklistView({
 
       requestAnimationFrame(() => {
         setDragState({
-          section: item.section,
+          groupKey,
           fromId: item.id,
           floatIndex: fromIndex,
           slotHeight,
@@ -1724,16 +1752,16 @@ function ChecklistView({
   }
 
   const handleListDragOver = (
-    section: ChecklistItem['section'],
-    sectionItems: ChecklistItem[],
+    groupKey: string,
+    groupItems: ChecklistItem[],
     event: ReactDragEvent<HTMLDivElement>,
   ) => {
     event.preventDefault()
     const current = dragStateRef.current
-    if (!current || current.section !== section) return
+    if (!current || current.groupKey !== groupKey) return
 
     const floatIndex = getFloatIndexFromPointer(
-      sectionItems.length,
+      groupItems.length,
       event.clientY,
       current.listTop,
       current.slotHeight,
@@ -1743,19 +1771,239 @@ function ChecklistView({
     setDragState((state) => state ? { ...state, floatIndex } : null)
   }
 
-  const dropItem = (section: ChecklistItem['section'], sectionItems: ChecklistItem[], event: ReactDragEvent<HTMLDivElement>) => {
+  const dropItem = (
+    groupKey: string,
+    groupItems: ChecklistItem[],
+    event: ReactDragEvent<HTMLDivElement>,
+  ) => {
     event.preventDefault()
     event.stopPropagation()
 
     const current = dragStateRef.current
-    if (current?.section === section) {
+    if (current?.groupKey === groupKey) {
       const targetIndex = Math.round(current.floatIndex)
-      const toItem = sectionItems[targetIndex]
+      const toItem = groupItems[targetIndex]
       if (toItem && current.fromId !== toItem.id) {
-        onReorder(section, current.fromId, toItem.id)
+        onReorder(current.fromId, toItem.id)
       }
     }
     endDrag()
+  }
+
+  const renderChecklistPanel = ({
+    title,
+    groupKey,
+    groupItems,
+    section,
+    listType,
+    packingCategory,
+  }: {
+    title: string
+    groupKey: string
+    groupItems: ChecklistItem[]
+    section: ChecklistItem['section']
+    listType: ChecklistListType
+    packingCategory: PackingCategory | null
+  }) => {
+    const taskItems = groupItems.filter((item) => item.kind === 'task')
+    const completedCount = taskItems.filter((item) => item.done).length
+    const isDraggingGroup = dragState?.groupKey === groupKey
+
+    return (
+      <article className="panel checklist-panel" key={groupKey}>
+        <div className="panel-header">
+          <div className="check-panel-title">
+            <h3>{title}</h3>
+            {taskItems.length > 0 && <span>{completedCount}/{taskItems.length}</span>}
+          </div>
+          <button
+            className="round-add-button"
+            type="button"
+            disabled={readonly}
+            aria-label={`${title} 항목 추가`}
+            onClick={() => openAddForm(groupKey)}
+          >
+            <Plus size={16} />
+          </button>
+        </div>
+        {addingGroup === groupKey && (
+          <form
+            className="check-add-form"
+            onSubmit={(event) => submitNewItem(section, listType, packingCategory, event)}
+          >
+            {listType === 'todo' && (
+              <div className="check-add-kind">
+                <button
+                  type="button"
+                  className={addingKind === 'task' ? 'active' : ''}
+                  disabled={readonly}
+                  onClick={() => setAddingKind('task')}
+                >
+                  To-do
+                </button>
+                <button
+                  type="button"
+                  className={addingKind === 'divider' ? 'active' : ''}
+                  disabled={readonly}
+                  onClick={() => setAddingKind('divider')}
+                >
+                  구분자
+                </button>
+              </div>
+            )}
+            <input
+              autoFocus
+              value={draftTitle}
+              placeholder={
+                listType === 'packing'
+                  ? `${title} 준비물 추가`
+                  : addingKind === 'divider' ? '구분자 이름' : 'To-do 추가'
+              }
+              disabled={readonly}
+              onChange={(event) => setDraftTitle(event.target.value)}
+            />
+            <button className="primary-button" type="submit" disabled={readonly || !draftTitle.trim()}>
+              추가
+            </button>
+          </form>
+        )}
+        <div
+          className={`check-list ${isDraggingGroup ? 'is-sorting' : ''}`}
+          ref={(element) => { listRefs.current[groupKey] = element }}
+          onDragOver={(event) => handleListDragOver(groupKey, groupItems, event)}
+          onDragEnd={endDrag}
+          onDrop={(event) => dropItem(groupKey, groupItems, event)}
+        >
+          {groupItems.map((item) => {
+            const isDivider = item.kind === 'divider'
+            const isPreview = isDraggingGroup && dragState.fromId === item.id
+            const isEditing = editingId === item.id
+            const shift = isDraggingGroup
+              ? getContinuousShifts(groupItems, dragState.fromId, dragState.floatIndex, dragState.slotHeight)[item.id] ?? 0
+              : 0
+
+            return (
+              <div
+                key={item.id}
+                data-check-id={item.id}
+                className={`check-item ${isDivider ? 'divider' : ''} ${item.done ? 'done' : ''} ${isPreview ? 'drag-preview' : ''} ${isEditing ? 'editing' : ''}`}
+                style={shift ? { transform: `translateY(${shift}px)` } : undefined}
+                onDragOver={(event) => handleListDragOver(groupKey, groupItems, event)}
+                onDrop={(event) => dropItem(groupKey, groupItems, event)}
+              >
+                {isDivider ? (
+                  <>
+                    <div className="check-divider-body">
+                      {isEditing ? (
+                        <input
+                          autoFocus
+                          className="check-edit-input"
+                          value={editDraft}
+                          disabled={readonly}
+                          aria-label={`${item.title} 수정`}
+                          onChange={(event) => setEditDraft(event.target.value)}
+                          onKeyDown={(event) => handleEditKeyDown(item, event)}
+                          onBlur={() => submitEdit(item)}
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          className="check-divider-title"
+                          disabled={readonly || isPreview}
+                          title="클릭해서 수정"
+                          onClick={() => startEditing(item)}
+                        >
+                          {item.title}
+                        </button>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      className="check-delete"
+                      disabled={readonly || isPreview || isEditing}
+                      aria-label={`${item.title} 구분자 삭제`}
+                      title="구분자 삭제"
+                      onClick={() => requestDelete(item)}
+                    >
+                      <X size={15} />
+                    </button>
+                  </>
+                ) : (
+                  <div className="check-toggle">
+                    <button
+                      type="button"
+                      disabled={readonly}
+                      className="check-mark"
+                      aria-label={item.done ? `${item.title} 완료 취소` : `${item.title} 완료`}
+                      onClick={() => handleToggle(groupKey, item.id)}
+                    >
+                      {item.done ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+                    </button>
+                    {isEditing ? (
+                      <input
+                        autoFocus
+                        className="check-edit-input"
+                        value={editDraft}
+                        disabled={readonly}
+                        aria-label={`${item.title} 수정`}
+                        onChange={(event) => setEditDraft(event.target.value)}
+                        onKeyDown={(event) => handleEditKeyDown(item, event)}
+                        onBlur={() => submitEdit(item)}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        className="check-title"
+                        disabled={readonly || isPreview}
+                        title="클릭해서 수정"
+                        onClick={() => startEditing(item)}
+                      >
+                        {item.title}
+                      </button>
+                    )}
+                  </div>
+                )}
+                {!isDivider && (
+                  <div className="check-actions">
+                    {item.done && (
+                      <button
+                        type="button"
+                        className="check-delete completed-task-delete"
+                        disabled={readonly || isPreview || isEditing}
+                        aria-label={`${item.title} 삭제`}
+                        title="완료 항목 삭제"
+                        onClick={() => requestDelete(item)}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  className="drag-handle"
+                  draggable={!readonly && !isEditing}
+                  disabled={readonly || isEditing}
+                  aria-label={`${item.title} 순서 변경`}
+                  title="드래그해서 순서 변경"
+                  aria-hidden={isPreview}
+                  tabIndex={isPreview ? -1 : 0}
+                  onDragStart={(event) => startDrag(groupKey, item, groupItems, event)}
+                  onDragEnd={endDrag}
+                >
+                  <GripVertical size={17} />
+                </button>
+              </div>
+            )
+          })}
+          {groupItems.length === 0 && (
+            <div className="check-empty">
+              {listType === 'packing' ? '아직 준비물이 없습니다.' : '아직 할 일이 없습니다.'}
+            </div>
+          )}
+        </div>
+      </article>
+    )
   }
 
   return (
@@ -1778,190 +2026,61 @@ function ChecklistView({
           </section>
         </div>
       )}
-      <section className="checklist-board">
-      {sections.map((section) => {
-        const sectionItems = items.filter((item) => item.section === section).sort((a, b) => a.sortOrder - b.sortOrder)
-
-        return (
-          <article className="panel" key={section}>
-            <div className="panel-header">
-              <h3>{section}</h3>
-              <button
-                className="round-add-button"
-                type="button"
-                disabled={readonly}
-                aria-label={`${section} 항목 추가`}
-                onClick={() => openAddForm(section)}
-              >
-                <Plus size={16} />
-              </button>
-            </div>
-            {addingSection === section && (
-              <form className="check-add-form" onSubmit={(event) => submitNewItem(section, event)}>
-                <div className="check-add-kind">
-                  <button
-                    type="button"
-                    className={addingKind === 'task' ? 'active' : ''}
-                    disabled={readonly}
-                    onClick={() => setAddingKind('task')}
-                  >
-                    To-do
-                  </button>
-                  <button
-                    type="button"
-                    className={addingKind === 'divider' ? 'active' : ''}
-                    disabled={readonly}
-                    onClick={() => setAddingKind('divider')}
-                  >
-                    구분자
-                  </button>
-                </div>
-                <input
-                  autoFocus
-                  value={draftTitle}
-                  placeholder={addingKind === 'divider' ? '구분자 이름' : 'To-do 추가'}
-                  disabled={readonly}
-                  onChange={(event) => setDraftTitle(event.target.value)}
-                />
-                <button className="primary-button" type="submit" disabled={readonly || !draftTitle.trim()}>
-                  추가
-                </button>
-              </form>
-            )}
-            <div
-              className={`check-list ${dragState?.section === section ? 'is-sorting' : ''}`}
-              ref={(element) => { listRefs.current[section] = element }}
-              onDragOver={(event) => handleListDragOver(section, sectionItems, event)}
-              onDragEnd={endDrag}
-              onDrop={(event) => dropItem(section, sectionItems, event)}
-            >
-              {sectionItems.map((item) => {
-                const isDivider = item.kind === 'divider'
-                const isDraggingSection = dragState?.section === section
-                const isPreview = isDraggingSection && dragState.fromId === item.id
-                const isEditing = editingId === item.id
-                const shift = isDraggingSection
-                  ? getContinuousShifts(sectionItems, dragState.fromId, dragState.floatIndex, dragState.slotHeight)[item.id] ?? 0
-                  : 0
-
-                return (
-                <div
-                  key={item.id}
-                  data-check-id={item.id}
-                  className={`check-item ${isDivider ? 'divider' : ''} ${item.done ? 'done' : ''} ${isPreview ? 'drag-preview' : ''} ${isEditing ? 'editing' : ''}`}
-                  style={shift ? { transform: `translateY(${shift}px)` } : undefined}
-                  onDragOver={(event) => handleListDragOver(section, sectionItems, event)}
-                  onDrop={(event) => dropItem(section, sectionItems, event)}
-                >
-                  {isDivider ? (
-                    <>
-                      <div className="check-divider-body">
-                        {isEditing ? (
-                          <input
-                            autoFocus
-                            className="check-edit-input"
-                            value={editDraft}
-                            disabled={readonly}
-                            aria-label={`${item.title} 수정`}
-                            onChange={(event) => setEditDraft(event.target.value)}
-                            onKeyDown={(event) => handleEditKeyDown(item, event)}
-                            onBlur={() => submitEdit(item)}
-                          />
-                        ) : (
-                          <button
-                            type="button"
-                            className="check-divider-title"
-                            disabled={readonly || isPreview}
-                            title="클릭해서 수정"
-                            onClick={() => startEditing(item)}
-                          >
-                            {item.title}
-                          </button>
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        className="check-delete"
-                        disabled={readonly || isPreview || isEditing}
-                        aria-label={`${item.title} 구분자 삭제`}
-                        title="구분자 삭제"
-                        onClick={() => requestDelete(item)}
-                      >
-                        <X size={15} />
-                      </button>
-                    </>
-                  ) : (
-                    <div className="check-toggle">
-                      <button
-                        type="button"
-                        disabled={readonly}
-                        className="check-mark"
-                        aria-label={item.done ? `${item.title} 완료 취소` : `${item.title} 완료`}
-                        onClick={() => handleToggle(section, item.id)}
-                      >
-                        {item.done ? <CheckCircle2 size={18} /> : <Circle size={18} />}
-                      </button>
-                      {isEditing ? (
-                        <input
-                          autoFocus
-                          className="check-edit-input"
-                          value={editDraft}
-                          disabled={readonly}
-                          aria-label={`${item.title} 수정`}
-                          onChange={(event) => setEditDraft(event.target.value)}
-                          onKeyDown={(event) => handleEditKeyDown(item, event)}
-                          onBlur={() => submitEdit(item)}
-                        />
-                      ) : (
-                        <button
-                          type="button"
-                          className="check-title"
-                          disabled={readonly || isPreview}
-                          title="클릭해서 수정"
-                          onClick={() => startEditing(item)}
-                        >
-                          {item.title}
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  {!isDivider && (
-                    <div className="check-actions">
-                      {item.done && (
-                        <button
-                          type="button"
-                          className="check-delete completed-task-delete"
-                          disabled={readonly || isPreview || isEditing}
-                          aria-label={`${item.title} 삭제`}
-                          title="완료 항목 삭제"
-                          onClick={() => requestDelete(item)}
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    className="drag-handle"
-                    draggable={!readonly && !isEditing}
-                    disabled={readonly || isEditing}
-                    aria-label={`${item.title} 순서 변경`}
-                    title="드래그해서 순서 변경"
-                    aria-hidden={isPreview}
-                    tabIndex={isPreview ? -1 : 0}
-                    onDragStart={(event) => startDrag(item, sectionItems, event)}
-                    onDragEnd={endDrag}
-                  >
-                    <GripVertical size={17} />
-                  </button>
-                </div>
-                )
-              })}
-            </div>
-          </article>
-        )
-      })}
+      <div className="checklist-list-tabs" role="tablist" aria-label="체크리스트 유형">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeList === 'todo'}
+          className={activeList === 'todo' ? 'active' : ''}
+          onClick={() => {
+            setAddingGroup(null)
+            setActiveList('todo')
+          }}
+        >
+          <ListChecks size={17} />
+          할 일
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeList === 'packing'}
+          className={activeList === 'packing' ? 'active' : ''}
+          onClick={() => {
+            setAddingGroup(null)
+            setActiveList('packing')
+          }}
+        >
+          <Luggage size={17} />
+          준비물
+        </button>
+      </div>
+      <p className="checklist-list-description">
+        {activeList === 'todo'
+          ? '출국 전부터 귀국 전까지 해야 할 일을 관리하세요.'
+          : '분류별로 챙길 물건을 기록하고 빠짐없이 확인하세요.'}
+      </p>
+      <section className={`checklist-board ${activeList === 'packing' ? 'packing-board' : ''}`}>
+        {activeList === 'todo'
+          ? sections.map((section) => renderChecklistPanel({
+              title: section,
+              groupKey: `todo:${section}`,
+              groupItems: items
+                .filter((item) => item.listType === 'todo' && item.section === section)
+                .sort((a, b) => a.sortOrder - b.sortOrder),
+              section,
+              listType: 'todo',
+              packingCategory: null,
+            }))
+          : packingCategories.map((packingCategory) => renderChecklistPanel({
+              title: packingCategory,
+              groupKey: `packing:${packingCategory}`,
+              groupItems: items
+                .filter((item) => item.listType === 'packing' && item.packingCategory === packingCategory)
+                .sort((a, b) => a.sortOrder - b.sortOrder),
+              section: '출국 전',
+              listType: 'packing',
+              packingCategory,
+            }))}
       </section>
     </>
   )

@@ -83,6 +83,8 @@ type ChecklistRow = {
   trip_id: string
   section: ChecklistItem['section']
   kind: ChecklistItem['kind'] | null
+  list_type: ChecklistItem['listType'] | null
+  packing_category: ChecklistItem['packingCategory'] | null
   title: string
   done: boolean
   sort_order: number | null
@@ -193,6 +195,8 @@ const fromChecklist = (row: ChecklistRow): ChecklistItem => ({
   tripId: row.trip_id,
   section: row.section,
   kind: row.kind ?? 'task',
+  listType: row.list_type ?? 'todo',
+  packingCategory: row.packing_category ?? null,
   title: row.title,
   done: row.done,
   sortOrder: row.sort_order ?? 0,
@@ -204,6 +208,8 @@ const toChecklist = (item: ChecklistItem, userId: string) => ({
   trip_id: item.tripId,
   section: item.section,
   kind: item.kind,
+  list_type: item.listType,
+  packing_category: item.packingCategory,
   title: item.title,
   done: item.done,
   sort_order: item.sortOrder,

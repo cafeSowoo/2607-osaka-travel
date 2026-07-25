@@ -59,12 +59,16 @@ export type Reservation = {
 }
 
 export type ChecklistItemKind = 'task' | 'divider'
+export type ChecklistListType = 'todo' | 'packing'
+export type PackingCategory = '필수품' | '의류' | '전자기기' | '세면용품' | '의약품' | '기타'
 
 export type ChecklistItem = {
   id: string
   tripId: string
   section: '출국 전' | '여행 중' | '귀국 전'
   kind: ChecklistItemKind
+  listType: ChecklistListType
+  packingCategory: PackingCategory | null
   title: string
   done: boolean
   sortOrder: number

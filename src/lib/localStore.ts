@@ -19,6 +19,8 @@ const normalizeTravelData = (data: TravelData): TravelData => ({
   checklistItems: data.checklistItems.map((item) => ({
     ...item,
     kind: item.kind ?? 'task',
+    listType: item.listType ?? 'todo',
+    packingCategory: item.packingCategory ?? null,
   })),
   memos: (data.memos ?? []).map((memo) => ({ ...memo })),
 })

@@ -1054,6 +1054,61 @@ textarea { min-height: 56px; resize: vertical; }
 .reservation-chevron { margin-top: 12px; color: var(--muted); }
 
 .checklist-board, .settings-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.checklist-list-tabs {
+  width: fit-content;
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(112px, 1fr));
+  gap: 4px;
+  margin-bottom: 8px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+}
+.checklist-list-tabs button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+}
+.checklist-list-tabs button:hover { color: var(--text); }
+.checklist-list-tabs button.active {
+  background: #fff;
+  color: var(--accent);
+  box-shadow: 0 2px 8px rgba(43, 39, 33, 0.08);
+}
+.checklist-list-description {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.checklist-panel { min-width: 0; }
+.check-panel-title {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.check-panel-title span {
+  display: inline-flex;
+  min-width: 36px;
+  min-height: 22px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+}
 .settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .round-add-button {
   width: 32px;
@@ -1158,6 +1213,17 @@ textarea { min-height: 56px; resize: vertical; }
 .completed-task-delete { color: var(--danger); }
 .check-list.is-sorting .check-item {
   transition: transform 140ms cubic-bezier(0.2, 0, 0, 1);
+}
+.check-empty {
+  min-height: 72px;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
 }
 .check-item.done { color: var(--muted); background: #fbfbfa; }
 .check-item.drag-preview {
@@ -1429,6 +1495,11 @@ textarea { min-height: 56px; resize: vertical; }
     align-self: start;
   }
   .today-grid, .view-grid, .schedule-layout, .checklist-board, .settings-grid, .memo-screen { grid-template-columns: 1fr; }
+  .checklist-list-tabs {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .checklist-list-tabs button { min-height: 42px; }
   .schedule-screen {
     gap: 0;
     --fab-size: 54px;

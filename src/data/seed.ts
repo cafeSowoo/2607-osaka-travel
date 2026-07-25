@@ -1,6 +1,7 @@
-import type { ChecklistItem, ItineraryItem, Reservation, TravelData, Trip, TripDay } from '../types'
+import type { ChecklistItem, ItineraryItem, PackingCategory, Reservation, TravelData, Trip, TripDay } from '../types'
 
 export const categories = ['이동', '식사', '카페', '관광', '쇼핑', '휴식', '기타'] as const
+export const packingCategories: PackingCategory[] = ['필수품', '의류', '전자기기', '세면용품', '의약품', '기타']
 export const BACKUP_DAY_INDEX = 6
 
 export const tripDays: TripDay[] = [
@@ -53,13 +54,13 @@ export const seedReservations: Reservation[] = [
 ]
 
 export const seedChecklist: ChecklistItem[] = [
-  { id: 'check-divider-docs', tripId: seedTrip.id, section: '출국 전', kind: 'divider', title: '서류', done: false, sortOrder: 5 },
-  { id: 'check-passport', tripId: seedTrip.id, section: '출국 전', kind: 'task', title: '여권 만료일과 여권 지참 확인', done: false, sortOrder: 10 },
-  { id: 'check-divider-connectivity', tripId: seedTrip.id, section: '출국 전', kind: 'divider', title: '통신 · 결제', done: false, sortOrder: 15 },
-  { id: 'check-esim', tripId: seedTrip.id, section: '출국 전', kind: 'task', title: 'eSIM 또는 로밍 준비', done: false, sortOrder: 20 },
-  { id: 'check-cash', tripId: seedTrip.id, section: '출국 전', kind: 'task', title: 'JPY 현금과 해외 결제 카드 준비', done: false, sortOrder: 30 },
-  { id: 'check-kobe-route', tripId: seedTrip.id, section: '여행 중', kind: 'task', title: '고베공항 → 숙소 이동 동선 확인', done: false, sortOrder: 40 },
-  { id: 'check-kix-route', tripId: seedTrip.id, section: '귀국 전', kind: 'task', title: '숙소 → 간사이공항 T2 이동 시간 확인', done: false, sortOrder: 50 },
+  { id: 'check-divider-docs', tripId: seedTrip.id, section: '출국 전', kind: 'divider', listType: 'todo', packingCategory: null, title: '서류', done: false, sortOrder: 5 },
+  { id: 'check-passport', tripId: seedTrip.id, section: '출국 전', kind: 'task', listType: 'todo', packingCategory: null, title: '여권 만료일과 여권 지참 확인', done: false, sortOrder: 10 },
+  { id: 'check-divider-connectivity', tripId: seedTrip.id, section: '출국 전', kind: 'divider', listType: 'todo', packingCategory: null, title: '통신 · 결제', done: false, sortOrder: 15 },
+  { id: 'check-esim', tripId: seedTrip.id, section: '출국 전', kind: 'task', listType: 'todo', packingCategory: null, title: 'eSIM 또는 로밍 준비', done: false, sortOrder: 20 },
+  { id: 'check-cash', tripId: seedTrip.id, section: '출국 전', kind: 'task', listType: 'todo', packingCategory: null, title: 'JPY 현금과 해외 결제 카드 준비', done: false, sortOrder: 30 },
+  { id: 'check-kobe-route', tripId: seedTrip.id, section: '여행 중', kind: 'task', listType: 'todo', packingCategory: null, title: '고베공항 → 숙소 이동 동선 확인', done: false, sortOrder: 40 },
+  { id: 'check-kix-route', tripId: seedTrip.id, section: '귀국 전', kind: 'task', listType: 'todo', packingCategory: null, title: '숙소 → 간사이공항 T2 이동 시간 확인', done: false, sortOrder: 50 },
 ]
 
 export const seedItineraryItems: ItineraryItem[] = []
