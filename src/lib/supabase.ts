@@ -1,5 +1,5 @@
 import { createClient, type Session, type SupabaseClient } from '@supabase/supabase-js'
-import { categories, createSeedData, seedTrip, tripDays } from '../data/seed'
+import { categories, createSeedData, legacyTripId, seedTrip, tripDays } from '../data/seed'
 import { sortItineraryItems } from './itinerarySort'
 import { isValidTime, normalizeTime } from './time'
 import type { Category, ChecklistItem, ItineraryAiPatch, ItineraryItem, Memo, Reservation, TravelData, Trip } from '../types'
@@ -278,8 +278,26 @@ export const loadSupabaseData = async (session: Session): Promise<TravelData> =>
       const { error } = await supabase.from(TABLES.reservations).upsert(seed.reservations.map((reservation) => toReservation(reservation, userId)))
       if (error) throw error
     }
-    if (seed.checklistItems.length) {
-      const { error } = await supabase.from(TABLES.checklistItems).upsert(seed.checklistItems.map((item) => toChecklist(item, userId)))
+    // 이전 여행(2607)의 체크리스트·메모가 있으면 그대로 복사하고, 체크 표시는 새 여행이라 해제한다.
+    const [legacyChecklist, legacyMemos] = await Promise.all([
+      supabase.from(TABLES.checklistItems).select('*').eq('user_id', userId).eq('trip_id', legacyTripId).order('sort_order'),
+      supabase.from(TABLES.memos).select('*').eq('user_id', userId).eq('trip_id', legacyTripId),
+    ])
+    if (legacyChecklist.error) throw legacyChecklist.error
+    if (legacyMemos.error) throw legacyMemos.error
+
+    const copiedId = (id: string) => `${seedTrip.id}-${id}`
+    const checklistToSeed = legacyChecklist.data?.length
+      ? (legacyChecklist.data as ChecklistRow[]).map((row) => ({ ...fromChecklist(row), id: copiedId(row.id), tripId: seedTrip.id, done: false }))
+      : seed.checklistItems
+    const memosToSeed = ((legacyMemos.data ?? []) as MemoRow[]).map((row) => ({ ...fromMemo(row), id: copiedId(row.id), tripId: seedTrip.id }))
+
+    if (checklistToSeed.length) {
+      const { error } = await supabase.from(TABLES.checklistItems).upsert(checklistToSeed.map((item) => toChecklist(item, userId)))
+      if (error) throw error
+    }
+    if (memosToSeed.length) {
+      const { error } = await supabase.from(TABLES.memos).upsert(memosToSeed.map((memo) => toMemo(memo, userId)))
       if (error) throw error
     }
   }

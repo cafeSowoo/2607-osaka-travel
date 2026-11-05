@@ -265,8 +265,8 @@ function AuthScreen({ login, configured }: { login: () => void; configured: bool
     <main className="auth-shell">
       <section className="auth-card">
         <div className="app-mark">旅</div>
-        <h1>2607 Osaka</h1>
-        <p>항공권, 호텔, Day1~Day5와 후보 일정을 한곳에서 관리하는 개인 여행 PWA입니다.</p>
+        <h1>2611 Osaka</h1>
+        <p>항공권, 숙소, Day1~Day3와 후보 일정을 한곳에서 관리하는 개인 여행 PWA입니다.</p>
         <button className="primary-button" onClick={login}>
           <LogIn size={18} />
           {configured ? 'Google로 로그인' : '데모 모드로 시작'}
@@ -283,7 +283,7 @@ function ShellNav({ activeView, setActiveView }: { activeView: View; setActiveVi
       <div className="brand-block">
         <div className="app-mark small"><Luggage size={19} /></div>
         <div>
-          <strong>2607 Osaka</strong>
+          <strong>2611 Osaka</strong>
         </div>
       </div>
       <div className="nav-list">
@@ -1427,7 +1427,9 @@ function ReservationsView({ reservations }: { reservations: Reservation[] }) {
 function ReservationCard({ reservation, compact = false }: { reservation: Reservation; compact?: boolean }) {
   const Icon = reservation.kind === 'hotel' ? Hotel : Plane
   const typeLabel = reservation.kind === 'hotel' ? '호텔' : '항공권'
-  const sourceBadge = reservation.kind === 'hotel' ? `아고다 예약번호 ${reservation.reference}` : `예약번호 ${reservation.reference}`
+  const sourceBadge = reservation.kind === 'hotel'
+    ? `${reservation.meta.platform ?? '아고다'} 예약번호 ${reservation.reference || '미입력'}`
+    : `예약번호 ${reservation.reference || '미입력'}`
   const visibleDetails = compact ? reservation.details.slice(0, 2) : reservation.details
 
   return (

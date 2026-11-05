@@ -2,7 +2,7 @@ import { createSeedData, tripDays } from '../data/seed'
 import { sortItineraryItems } from './itinerarySort'
 import type { TravelData } from '../types'
 
-const STORAGE_KEY = 'osaka-travel-pwa:data:v4'
+const STORAGE_KEY = 'osaka-travel-pwa:data:v5'
 
 const normalizeTravelData = (data: TravelData): TravelData => ({
   ...data,

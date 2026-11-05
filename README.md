@@ -1,4 +1,4 @@
-# 2607 Osaka Travel Desk
+# 2611 Osaka Travel Desk
 
 오사카 여행 일정, 예약, 체크리스트를 관리하는 개인용 React + Vite PWA입니다.
 
@@ -35,7 +35,7 @@ npm run build
 
 ## 주요 기능
 
-- Day1~Day5 일정표
+- Day1~Day3 일정표 (2611 · 11/6~11/8)
 - PC 표 편집 + 우측 상세 패널
 - 모바일 오늘 일정 카드 + 하단 탭
 - 항공/호텔 예약 카드

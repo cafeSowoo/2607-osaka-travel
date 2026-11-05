@@ -1,4 +1,4 @@
-const CACHE_NAME = 'osaka-travel-desk-v4'
+const CACHE_NAME = 'osaka-travel-desk-v5'
 const APP_SHELL = [
   './',
   './index.html',
